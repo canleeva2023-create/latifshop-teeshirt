@@ -81,6 +81,11 @@ for key, val in [
         ("edit_vend_idx", None),
         # Alimentation admin: modification avant approbation
         ("ali_edit_idx", None),
+        # Calendrier admin
+        ("v_admin_date", None),
+        ("ali_admin_date", None),
+        ("v_admin_month", None),
+        ("ali_admin_month", None),
 ]:
     if key not in st.session_state:
         st.session_state[key] = val
@@ -2931,6 +2936,146 @@ with tab_ventes:
     stock_data_v  = load_stock()
     vendeur_actuel = st.session_state.user_name
 
+    # ════════════════════════════════════════════════════════════════════════
+    # VUE ADMIN : Calendrier des ventes
+    # ════════════════════════════════════════════════════════════════════════
+    if is_admin:
+        import calendar as _cal
+        ventes_cal = load_ventes()
+        now_cal = datetime.now()
+
+        # Mois affiché (par défaut = mois courant)
+        if st.session_state.v_admin_month is None:
+            st.session_state.v_admin_month = (now_cal.year, now_cal.month)
+        yr_v, mo_v = st.session_state.v_admin_month
+
+        # Navigation mois
+        nav1, nav2, nav3 = st.columns([1, 3, 1])
+        with nav1:
+            if st.button("◀ Mois précédent", key="v_cal_prev", use_container_width=True):
+                mo2 = mo_v - 1
+                yr2 = yr_v if mo2 > 0 else yr_v - 1
+                mo2 = mo2 if mo2 > 0 else 12
+                st.session_state.v_admin_month = (yr2, mo2)
+                st.session_state.v_admin_date = None
+                st.rerun()
+        with nav2:
+            st.markdown(
+                f'<div style="text-align:center;font-family:Space Grotesk,sans-serif;'
+                f'font-size:1.2rem;font-weight:700;color:#1B2B4B;padding:.5rem">'
+                f'{_cal.month_name[mo_v].capitalize()} {yr_v}</div>',
+                unsafe_allow_html=True)
+        with nav3:
+            if st.button("Mois suivant ▶", key="v_cal_next", use_container_width=True):
+                mo2 = mo_v + 1
+                yr2 = yr_v if mo2 <= 12 else yr_v + 1
+                mo2 = mo2 if mo2 <= 12 else 1
+                st.session_state.v_admin_month = (yr2, mo2)
+                st.session_state.v_admin_date = None
+                st.rerun()
+
+        # Index ventes par jour pour ce mois
+        ventes_par_jour = {}
+        for v in ventes_cal:
+            ds = v.get("date","")[:10]
+            try:
+                dobj = datetime.strptime(ds, "%d/%m/%Y")
+                if dobj.year == yr_v and dobj.month == mo_v:
+                    key_d = ds
+                    ventes_par_jour.setdefault(key_d, []).append(v)
+            except: pass
+
+        # Affichage calendrier
+        jours_semaine = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
+        header_html = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px">'
+        for j in jours_semaine:
+            header_html += f'<div style="text-align:center;font-size:.7rem;font-weight:700;color:#8A9AB5;padding:.3rem">{j}</div>'
+        header_html += '</div>'
+        st.markdown(header_html, unsafe_allow_html=True)
+
+        cal_matrix = _cal.monthcalendar(yr_v, mo_v)
+        selected_d = st.session_state.v_admin_date
+
+        clicked_day_v = None
+        for week in cal_matrix:
+            week_cols = st.columns(7)
+            for wi, day in enumerate(week):
+                with week_cols[wi]:
+                    if day == 0:
+                        st.markdown('<div style="height:52px"></div>', unsafe_allow_html=True)
+                        continue
+                    day_str = f"{day:02d}/{mo_v:02d}/{yr_v}"
+                    nb_v_day = len(ventes_par_jour.get(day_str, []))
+                    is_today = (day == now_cal.day and mo_v == now_cal.month and yr_v == now_cal.year)
+                    is_sel   = (day_str == selected_d)
+                    border   = "3px solid #2563EB" if is_sel else ("2px solid #1B2B4B" if is_today else "1px solid #E0E5EF")
+                    bg       = "#EEF4FF" if is_sel else ("#F4F6FA" if is_today else "#FFF")
+                    dot      = f'<div style="width:8px;height:8px;border-radius:50%;background:#059669;margin:2px auto 0"></div>' if nb_v_day > 0 else ""
+                    badge    = f'<div style="font-size:.6rem;color:#059669;font-weight:700">{nb_v_day}v</div>' if nb_v_day > 0 else ""
+                    st.markdown(
+                        f'<div style="background:{bg};border:{border};border-radius:10px;'
+                        f'padding:.3rem;text-align:center;min-height:52px">'
+                        f'<div style="font-weight:{"700" if is_today else "500"};color:#1B2B4B;font-size:.9rem">{day}</div>'
+                        f'{badge}{dot}</div>', unsafe_allow_html=True)
+                    if st.button("　", key=f"v_day_{day}", use_container_width=True,
+                                 help=f"{nb_v_day} vente(s)"):
+                        clicked_day_v = day_str
+
+        if clicked_day_v:
+            st.session_state.v_admin_date = clicked_day_v
+            st.rerun()
+
+        # ── Statistiques du jour sélectionné ────────────────────────────────
+        if selected_d:
+            ventes_jour = ventes_par_jour.get(selected_d, [])
+            st.markdown(f"<hr>", unsafe_allow_html=True)
+            st.markdown(
+                f'<div style="font-family:Space Grotesk,sans-serif;font-size:1.1rem;'
+                f'font-weight:700;color:#1B2B4B;margin-bottom:1rem">📊 Statistiques — {selected_d}</div>',
+                unsafe_allow_html=True)
+
+            if not ventes_jour:
+                st.info("Aucune vente ce jour.")
+            else:
+                pieces_j = sum(v.get("quantite",1) for v in ventes_jour)
+                sm1, sm2, sm3 = st.columns(3)
+                sm1.metric("Transactions", len(ventes_jour))
+                sm2.metric("Pièces vendues", pieces_j)
+                vendeurs_j = len(set(v.get("vendeur","") for v in ventes_jour))
+                sm3.metric("Vendeurs actifs", vendeurs_j)
+
+                # Par vendeur
+                st.markdown("**Par vendeur :**")
+                agg_vj = {}
+                for v in ventes_jour:
+                    agg_vj[v.get("vendeur","?")] = agg_vj.get(v.get("vendeur","?"),0) + v.get("quantite",1)
+                for vnd, qty in sorted(agg_vj.items(), key=lambda x:-x[1]):
+                    ini_vnd = "".join(p[0].upper() for p in vnd.split()[:2])
+                    st.markdown(
+                        f'<div style="display:flex;align-items:center;gap:.8rem;'
+                        f'background:#F8F9FC;border-radius:8px;padding:.5rem .8rem;margin-bottom:.3rem">'
+                        f'<div class="profil-avatar" style="width:30px;height:30px;font-size:.7rem;min-width:30px">{ini_vnd}</div>'
+                        f'<strong style="color:#1B2B4B">{vnd}</strong>'
+                        f'<span style="margin-left:auto;color:#059669;font-weight:700">{qty} pcs</span></div>',
+                        unsafe_allow_html=True)
+
+                # Détail ventes
+                st.markdown("**Détail des ventes :**")
+                for v in ventes_jour:
+                    hx_v2 = HEX_MAP.get(v.get("couleur",""),"#888")
+                    st.markdown(
+                        f'<div style="background:#FFF;border:1px solid #E0E5EF;border-radius:8px;'
+                        f'padding:.6rem 1rem;margin-bottom:.3rem;display:flex;'
+                        f'align-items:center;justify-content:space-between">'
+                        f'<div><strong style="color:#1B2B4B">{v.get("model_name","?")}</strong> '
+                        f'<span style="display:inline-flex;align-items:center;gap:4px;font-size:.78rem">'
+                        f'<span style="width:10px;height:10px;border-radius:50%;background:{hx_v2};display:inline-block"></span>'
+                        f'{v.get("couleur","?")} · {v.get("taille","?")}</span></div>'
+                        f'<div style="text-align:right"><span style="color:#2563EB;font-weight:700">×{v.get("quantite",1)}</span>'
+                        f'<div style="font-size:.65rem;color:#8A9AB5">{v.get("vendeur","?")}</div></div></div>',
+                        unsafe_allow_html=True)
+        st.stop()
+
     # ── Init session state du flux vente ─────────────────────────────────────
     for k, v in [("v_step", 0), ("v_cat", None), ("v_art_key", None),
                  ("v_color", None), ("v_size", None)]:
@@ -3738,24 +3883,112 @@ if tab_ali_admin:
 
         # ── Sous-onglet 2 : Historique ───────────────────────────────────────
         with sub_hist:
-            if not hist_list:
-                st.info("Aucune alimentation dans l'historique.")
-            else:
-                st.markdown(f'<span class="section-label">{len(hist_list)} alimentation(s) passée(s)</span>', unsafe_allow_html=True)
-                for hi, h in enumerate(hist_list):
-                    statut_h = h.get("statut","?")
-                    color_h  = "#059669" if statut_h=="approuve" else "#DC2626"
-                    badge_h  = "✅ Approuvé" if statut_h=="approuve" else "❌ Rejeté"
-                    total_h  = sum(h.get("qtys",{}).values())
-                    st.markdown(
-                        f'<div style="background:#FFF;border:1px solid #E0E5EF;border-radius:12px;'
-                        f'padding:1rem 1.2rem;margin-bottom:.6rem;display:flex;justify-content:space-between;align-items:center">'
-                        f'<div><strong style="color:#1B2B4B">{h.get("model_name","?")}</strong> '
-                        f'<span style="font-size:.75rem;color:#8A9AB5">par {h.get("livreur","?")} — {h.get("date","?")}</span><br>'
-                        f'<span style="font-size:.78rem;color:#4A5568">+{total_h} pièce(s) · {h.get("categorie","?")}</span></div>'
-                        f'<span style="background:{color_h}22;color:{color_h};border:1px solid {color_h}44;'
-                        f'font-size:.65rem;font-weight:700;padding:3px 10px;border-radius:100px">{badge_h}</span></div>',
-                        unsafe_allow_html=True)
+            import calendar as _cal2
+            now_ali_cal = datetime.now()
+            if st.session_state.ali_admin_month is None:
+                st.session_state.ali_admin_month = (now_ali_cal.year, now_ali_cal.month)
+            yr_a, mo_a = st.session_state.ali_admin_month
+
+            # Navigation mois
+            an1, an2, an3 = st.columns([1, 3, 1])
+            with an1:
+                if st.button("◀ Mois précédent", key="ali_cal_prev", use_container_width=True):
+                    mo2a = mo_a - 1
+                    yr2a = yr_a if mo2a > 0 else yr_a - 1
+                    mo2a = mo2a if mo2a > 0 else 12
+                    st.session_state.ali_admin_month = (yr2a, mo2a)
+                    st.session_state.ali_admin_date = None
+                    st.rerun()
+            with an2:
+                st.markdown(
+                    f'<div style="text-align:center;font-family:Space Grotesk,sans-serif;'
+                    f'font-size:1.2rem;font-weight:700;color:#1B2B4B;padding:.5rem">'
+                    f'{_cal2.month_name[mo_a].capitalize()} {yr_a}</div>',
+                    unsafe_allow_html=True)
+            with an3:
+                if st.button("Mois suivant ▶", key="ali_cal_next", use_container_width=True):
+                    mo2a = mo_a + 1
+                    yr2a = yr_a if mo2a <= 12 else yr_a + 1
+                    mo2a = mo2a if mo2a <= 12 else 1
+                    st.session_state.ali_admin_month = (yr2a, mo2a)
+                    st.session_state.ali_admin_date = None
+                    st.rerun()
+
+            # Index alimentation par jour
+            ali_par_jour = {}
+            for h in hist_list:
+                ds_a = h.get("date","")[:10]
+                try:
+                    dobj_a = datetime.strptime(ds_a, "%d/%m/%Y")
+                    if dobj_a.year == yr_a and dobj_a.month == mo_a:
+                        ali_par_jour.setdefault(ds_a, []).append(h)
+                except: pass
+
+            # Calendrier
+            jours_s = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"]
+            hdr_a = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px">'
+            for j in jours_s:
+                hdr_a += f'<div style="text-align:center;font-size:.7rem;font-weight:700;color:#8A9AB5;padding:.3rem">{j}</div>'
+            hdr_a += '</div>'
+            st.markdown(hdr_a, unsafe_allow_html=True)
+
+            cal_mat_a = _cal2.monthcalendar(yr_a, mo_a)
+            sel_a = st.session_state.ali_admin_date
+            clicked_day_a = None
+
+            for week_a in cal_mat_a:
+                wk_cols_a = st.columns(7)
+                for wi_a, day_a in enumerate(week_a):
+                    with wk_cols_a[wi_a]:
+                        if day_a == 0:
+                            st.markdown('<div style="height:52px"></div>', unsafe_allow_html=True)
+                            continue
+                        day_str_a = f"{day_a:02d}/{mo_a:02d}/{yr_a}"
+                        nb_a = len(ali_par_jour.get(day_str_a, []))
+                        is_today_a = (day_a == now_ali_cal.day and mo_a == now_ali_cal.month and yr_a == now_ali_cal.year)
+                        is_sel_a   = (day_str_a == sel_a)
+                        border_a = "3px solid #059669" if is_sel_a else ("2px solid #1B2B4B" if is_today_a else "1px solid #E0E5EF")
+                        bg_a     = "#F0FDF4" if is_sel_a else ("#F4F6FA" if is_today_a else "#FFF")
+                        badge_a  = f'<div style="font-size:.6rem;color:#059669;font-weight:700">{nb_a}ali</div>' if nb_a > 0 else ""
+                        dot_a    = '<div style="width:8px;height:8px;border-radius:50%;background:#059669;margin:2px auto 0"></div>' if nb_a > 0 else ""
+                        st.markdown(
+                            f'<div style="background:{bg_a};border:{border_a};border-radius:10px;'
+                            f'padding:.3rem;text-align:center;min-height:52px">'
+                            f'<div style="font-weight:{"700" if is_today_a else "500"};color:#1B2B4B;font-size:.9rem">{day_a}</div>'
+                            f'{badge_a}{dot_a}</div>', unsafe_allow_html=True)
+                        if st.button("　", key=f"ali_day_{day_a}", use_container_width=True,
+                                     help=f"{nb_a} alimentation(s)"):
+                            clicked_day_a = day_str_a
+
+            if clicked_day_a:
+                st.session_state.ali_admin_date = clicked_day_a
+                st.rerun()
+
+            # ── Détail du jour sélectionné ───────────────────────────────────
+            if sel_a:
+                ali_jour = ali_par_jour.get(sel_a, [])
+                st.markdown("<hr>", unsafe_allow_html=True)
+                st.markdown(
+                    f'<div style="font-family:Space Grotesk,sans-serif;font-size:1.1rem;'
+                    f'font-weight:700;color:#1B2B4B;margin-bottom:1rem">📦 Alimentations — {sel_a}</div>',
+                    unsafe_allow_html=True)
+                if not ali_jour:
+                    st.info("Aucune alimentation ce jour.")
+                else:
+                    for h in ali_jour:
+                        statut_h = h.get("statut","?")
+                        color_h  = "#059669" if statut_h=="approuve" else "#DC2626"
+                        badge_h  = "✅ Approuvé" if statut_h=="approuve" else "❌ Rejeté"
+                        total_h  = sum(h.get("qtys",{}).values())
+                        st.markdown(
+                            f'<div style="background:#FFF;border:1px solid #E0E5EF;border-radius:12px;'
+                            f'padding:1rem 1.2rem;margin-bottom:.6rem;display:flex;justify-content:space-between;align-items:center">'
+                            f'<div><strong style="color:#1B2B4B">{h.get("model_name","?")}</strong> '
+                            f'<span style="font-size:.75rem;color:#8A9AB5">par {h.get("livreur","?")} — {h.get("date","?")}</span><br>'
+                            f'<span style="font-size:.78rem;color:#4A5568">+{total_h} pièce(s) · {h.get("categorie","?")}</span></div>'
+                            f'<span style="background:{color_h}22;color:{color_h};border:1px solid {color_h}44;'
+                            f'font-size:.65rem;font-weight:700;padding:3px 10px;border-radius:100px">{badge_h}</span></div>',
+                            unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ONGLET 5 : GESTION DES PROFILS (admin seulement)
