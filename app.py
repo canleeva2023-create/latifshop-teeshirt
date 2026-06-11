@@ -609,7 +609,19 @@ def _gs_save(sheet_name, data):
             ws = ss.worksheet(sheet_name)
         except Exception:
             ws = ss.add_worksheet(title=sheet_name, rows=1, cols=1)
-        ws.update("A1", json.dumps(data, ensure_ascii=False))
+        # Strip b64_thumb from stock before saving to GSheets (too large for a cell)
+        if sheet_name in ("stock", "inventaire_historique"):
+            if isinstance(data, dict):
+                data_gs = {k: {kk: vv for kk, vv in v.items() if kk != "b64_thumb"}
+                           if isinstance(v, dict) else v for k, v in data.items()}
+            elif isinstance(data, list):
+                data_gs = [{kk: vv for kk, vv in item.items() if kk != "b64_thumb"}
+                           if isinstance(item, dict) else item for item in data]
+            else:
+                data_gs = data
+        else:
+            data_gs = data
+        ws.update("A1", json.dumps(data_gs, ensure_ascii=False))
     except Exception:
         pass
 
@@ -620,6 +632,18 @@ def _load(path, default):
     sheet_name = os.path.splitext(os.path.basename(path))[0]
     gs_data = _gs_load(sheet_name, default)
     if gs_data is not None:
+        # GSheets ne stocke pas b64_thumb (trop grand) — on le récupère du fichier local
+        if sheet_name == "stock" and os.path.exists(path):
+            try:
+                with open(path, "r", encoding="utf-8") as f:
+                    local_data = json.load(f)
+                for mk, entry in gs_data.items():
+                    if isinstance(entry, dict) and mk in local_data:
+                        thumb = local_data[mk].get("b64_thumb", "")
+                        if thumb:
+                            entry["b64_thumb"] = thumb
+            except Exception:
+                pass
         return gs_data
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
