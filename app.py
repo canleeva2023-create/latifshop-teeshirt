@@ -3279,39 +3279,44 @@ with tab_ventes:
             if not arts_cat:
                 st.info("Aucun article en stock pour cette catégorie.")
             else:
-                r0, r1, r2 = st.columns(3)
-                col_cycle = [r0, r1, r2]
-                for idx_a, (mk_e, entry) in enumerate(arts_cat):
-                    sd_art = stock_data_v.get(mk_e, {})
-                    total_stock = sum(
-                        v for c_dict in sd_art.get("stock",{}).values()
-                        for v in c_dict.values())
-                    sbc   = "#059669" if total_stock > 5 else "#D97706" if total_stock > 0 else "#DC2626"
-                    slbl  = f"✅ {total_stock} en stock" if total_stock > 5 else (f"⚠️ {total_stock} restants" if total_stock > 0 else "❌ Épuisé")
-                    b64   = sd_art.get("b64_thumb","") or entry.get("b64_thumb","")
-                    if b64:
-                        photo_html = (f'<img src="data:image/jpeg;base64,{b64}" '
-                                      f'style="width:100%;height:140px;object-fit:cover;'
-                                      f'border-radius:10px;margin-bottom:.6rem;display:block">')
-                    else:
-                        photo_html = (f'<div style="width:100%;height:140px;background:#EEF1F7;'
-                                      f'border-radius:10px;display:flex;align-items:center;'
-                                      f'justify-content:center;font-size:3rem;margin-bottom:.6rem">👕</div>')
-                    with col_cycle[idx_a % 3]:
-                        st.markdown(
-                            f'<div style="background:#FFF;border:2px solid #E0E5EF;'
-                            f'border-radius:14px;padding:.8rem;margin-bottom:.8rem;'
-                            f'box-shadow:0 2px 8px #0001">'
-                            f'{photo_html}'
-                            f'<div style="font-weight:800;color:#1B2B4B;font-size:.95rem;'
-                            f'margin-bottom:.3rem">{entry["model_name"]}</div>'
-                            f'<div style="font-size:.75rem;color:{sbc};font-weight:700">{slbl}</div>'
-                            f'</div>', unsafe_allow_html=True)
-                        if total_stock > 0:
-                            if st.button("Choisir", key=f"vart_{mk_e}", use_container_width=True):
-                                clicked_art = mk_e
-                        else:
-                            st.button("Épuisé", key=f"vart_{mk_e}", disabled=True, use_container_width=True)
+                for row_start in range(0, len(arts_cat), 3):
+                    row_arts = arts_cat[row_start:row_start + 3]
+                    c0, c1, c2 = st.columns(3)
+                    row_cols = [c0, c1, c2]
+                    for ci3, (mk_e, entry) in enumerate(row_arts):
+                        sd_art = stock_data_v.get(mk_e, {})
+                        total_stock = sum(
+                            v for c_dict in sd_art.get("stock",{}).values()
+                            for v in c_dict.values())
+                        sbc  = "#059669" if total_stock > 5 else "#D97706" if total_stock > 0 else "#DC2626"
+                        slbl = (f"✅ {total_stock} en stock" if total_stock > 5
+                                else f"⚠️ {total_stock} restants" if total_stock > 0
+                                else "❌ Épuisé")
+                        b64  = sd_art.get("b64_thumb","") or entry.get("b64_thumb","")
+                        photo_html = (
+                            f'<img src="data:image/jpeg;base64,{b64}" '
+                            f'style="width:100%;height:140px;object-fit:cover;'
+                            f'border-radius:10px;margin-bottom:.6rem;display:block">'
+                            if b64 else
+                            f'<div style="width:100%;height:140px;background:#EEF1F7;'
+                            f'border-radius:10px;display:flex;align-items:center;'
+                            f'justify-content:center;font-size:3rem;margin-bottom:.6rem">👕</div>'
+                        )
+                        with row_cols[ci3]:
+                            st.markdown(
+                                f'<div style="background:#FFF;border:2px solid #E0E5EF;'
+                                f'border-radius:14px;padding:.8rem;margin-bottom:.8rem;'
+                                f'box-shadow:0 2px 8px #0001">'
+                                f'{photo_html}'
+                                f'<div style="font-weight:800;color:#1B2B4B;font-size:.95rem;'
+                                f'margin-bottom:.3rem">{entry["model_name"]}</div>'
+                                f'<div style="font-size:.75rem;color:{sbc};font-weight:700">{slbl}</div>'
+                                f'</div>', unsafe_allow_html=True)
+                            if total_stock > 0:
+                                if st.button("Choisir", key=f"vart_{mk_e}", use_container_width=True):
+                                    clicked_art = mk_e
+                            else:
+                                st.button("Épuisé", key=f"vart_{mk_e}", disabled=True, use_container_width=True)
 
             if clicked_art:
                 st.session_state.v_art_key = clicked_art
