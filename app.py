@@ -534,9 +534,73 @@ tr:hover td{background:#EEF4FF!important;}
 """, unsafe_allow_html=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
+# GOOGLE SHEETS — SYNCHRONISATION CLOUD
+# ══════════════════════════════════════════════════════════════════════════════
+try:
+    import gspread
+    from google.oauth2.service_account import Credentials as _GCredentials
+    _GSPREAD_AVAILABLE = True
+except ImportError:
+    _GSPREAD_AVAILABLE = False
+
+_GS_SCOPES = [
+    "https://spreadsheets.google.com/feeds",
+    "https://www.googleapis.com/auth/drive",
+]
+
+@st.cache_resource(show_spinner=False)
+def _gs_client():
+    if not _GSPREAD_AVAILABLE:
+        return None
+    try:
+        creds = _GCredentials.from_service_account_info(
+            dict(st.secrets["gcp_service_account"]), scopes=_GS_SCOPES
+        )
+        return gspread.authorize(creds)
+    except Exception:
+        return None
+
+def _gs_spreadsheet():
+    client = _gs_client()
+    if client is None:
+        return None
+    try:
+        return client.open_by_key(st.secrets["sheets"]["spreadsheet_id"])
+    except Exception:
+        return None
+
+def _gs_load(sheet_name, default):
+    ss = _gs_spreadsheet()
+    if ss is None:
+        return None
+    try:
+        ws = ss.worksheet(sheet_name)
+        val = ws.acell("A1").value
+        return json.loads(val) if val else default
+    except Exception:
+        return None
+
+def _gs_save(sheet_name, data):
+    ss = _gs_spreadsheet()
+    if ss is None:
+        return
+    try:
+        try:
+            ws = ss.worksheet(sheet_name)
+        except Exception:
+            ws = ss.add_worksheet(title=sheet_name, rows=1, cols=1)
+        ws.update("A1", json.dumps(data, ensure_ascii=False))
+    except Exception:
+        pass
+
+# ══════════════════════════════════════════════════════════════════════════════
 # FONCTIONS I/O
 # ══════════════════════════════════════════════════════════════════════════════
 def _load(path, default):
+    sheet_name = os.path.splitext(os.path.basename(path))[0]
+    gs_data = _gs_load(sheet_name, default)
+    if gs_data is not None:
+        return gs_data
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -545,6 +609,8 @@ def _load(path, default):
 def _save(path, data):
     with open(path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
+    sheet_name = os.path.splitext(os.path.basename(path))[0]
+    _gs_save(sheet_name, data)
 
 def load_history():   return _load(SAVE_FILE, [])
 def load_stock():     return _load(STOCK_FILE, {})
