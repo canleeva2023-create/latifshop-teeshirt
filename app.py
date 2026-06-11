@@ -3199,15 +3199,16 @@ with tab_ventes:
         # ÉTAPE 0 — Choisir la catégorie
         # ════════════════════════════════════════════════════════════════
         if cur == 0:
-            st.markdown('<span class="section-label">Choisissez une catégorie</span>',
-                        unsafe_allow_html=True)
+            st.markdown(
+                '<div style="font-size:1.3rem;font-weight:800;color:#1B2B4B;margin-bottom:1.2rem">'
+                '🗂️ Choisissez une catégorie</div>', unsafe_allow_html=True)
             if not cats_v:
-                # Pas de catégories → passer direct aux articles
                 st.session_state.v_cat  = "Toutes"
                 st.session_state.v_step = 1
                 st.rerun()
 
-            nb_c = min(len(cats_v), 4)
+            clicked_cat = None
+            nb_c = min(len(cats_v), 3)
             c_cols = st.columns(nb_c)
             for i, cat in enumerate(cats_v):
                 cn = cat.get("name","") if isinstance(cat,dict) else cat
@@ -3218,27 +3219,42 @@ with tab_ventes:
                              and model_key(e["model_name"]) in stock_data_v)
                 with c_cols[i % nb_c]:
                     st.markdown(
-                        f'<div style="background:#FFF;border:2px solid #E0E5EF;'
-                        f'border-radius:14px;padding:1.2rem .8rem;text-align:center;'
-                        f'margin-bottom:.4rem">'
-                        f'<div style="font-size:2.2rem">{ci}</div>'
-                        f'<div style="font-weight:700;color:#1B2B4B;font-size:.88rem;'
-                        f'margin:.4rem 0">{cn}</div>'
-                        f'<div style="font-size:.68rem;color:#8A9AB5">{nb_art} article(s)</div>'
+                        f'<div style="background:#FFF;border:2px solid {cc}44;'
+                        f'border-radius:18px;padding:1.8rem 1rem;text-align:center;'
+                        f'margin-bottom:.6rem;box-shadow:0 3px 12px {cc}22">'
+                        f'<div style="font-size:3rem;margin-bottom:.6rem">{ci}</div>'
+                        f'<div style="font-weight:800;color:#1B2B4B;font-size:1.1rem;'
+                        f'margin-bottom:.4rem">{cn}</div>'
+                        f'<div style="background:{cc}22;color:{cc};font-size:.75rem;'
+                        f'font-weight:700;padding:3px 12px;border-radius:100px;'
+                        f'display:inline-block">{nb_art} article(s)</div>'
                         f'</div>', unsafe_allow_html=True)
-                    if st.button(f"Choisir", key=f"vcat_{i}", use_container_width=True):
-                        st.session_state.v_cat  = cn
-                        st.session_state.v_step = 1
-                        st.rerun()
+                    if st.button(f"Entrer →", key=f"vcat_{i}", use_container_width=True):
+                        clicked_cat = cn
+            if clicked_cat:
+                st.session_state.v_cat  = clicked_cat
+                st.session_state.v_step = 1
+                st.rerun()
 
         # ════════════════════════════════════════════════════════════════
         # ÉTAPE 1 — Choisir l'article (grille photos)
         # ════════════════════════════════════════════════════════════════
         elif cur == 1:
-            st.markdown(f'<div style="font-size:.78rem;color:#8A9AB5;margin-bottom:.8rem">'
-                        f'📂 {st.session_state.v_cat}</div>', unsafe_allow_html=True)
-            st.markdown('<span class="section-label">Choisissez un article</span>',
-                        unsafe_allow_html=True)
+            cat_obj_v = next((c for c in cats_v if
+                (c.get("name") if isinstance(c,dict) else c) == st.session_state.v_cat), None)
+            cat_icon_v  = cat_obj_v.get("icon","📦") if isinstance(cat_obj_v,dict) else "📦"
+            cat_color_v = cat_obj_v.get("color","#2563EB") if isinstance(cat_obj_v,dict) else "#2563EB"
+            st.markdown(
+                f'<div style="background:{cat_color_v}18;border:1.5px solid {cat_color_v}55;'
+                f'border-radius:12px;padding:.7rem 1.2rem;display:inline-flex;align-items:center;'
+                f'gap:.6rem;margin-bottom:1rem">'
+                f'<span style="font-size:1.5rem">{cat_icon_v}</span>'
+                f'<span style="font-weight:800;color:{cat_color_v};font-size:1.1rem">'
+                f'{st.session_state.v_cat}</span></div>',
+                unsafe_allow_html=True)
+            st.markdown(
+                '<div style="font-size:1.1rem;font-weight:800;color:#1B2B4B;margin-bottom:1rem">'
+                '👕 Choisissez un article</div>', unsafe_allow_html=True)
 
             arts_cat = []
             seen_mk  = set()
@@ -3252,62 +3268,57 @@ with tab_ventes:
                 seen_mk.add(mk_e)
                 arts_cat.append((mk_e, e))
 
-            # Tri par popularité (articles les plus vendus en premier)
+            # Tri par popularité
             ventes_count_v = {}
             for vv in load_ventes():
                 ventes_count_v[vv.get("model_key","")] = ventes_count_v.get(vv.get("model_key",""), 0) + vv.get("quantite",1)
             arts_cat.sort(key=lambda x: ventes_count_v.get(x[0], 0), reverse=True)
 
-            clicked_art = None   # ← collecte du clic HORS colonnes
+            clicked_art = None
 
             if not arts_cat:
                 st.info("Aucun article en stock pour cette catégorie.")
             else:
-                nb_cols_art = 3
-                for row in [arts_cat[i:i+nb_cols_art]
-                            for i in range(0, len(arts_cat), nb_cols_art)]:
-                    # Toujours 3 colonnes fixes pour éviter le bug React DOM
-                    r0, r1, r2 = st.columns(3)
-                    for ci2, col_ref in enumerate([r0, r1, r2]):
-                        if ci2 >= len(row):
-                            break
-                        mk_e, entry = row[ci2]
-                        sd_art = stock_data_v.get(mk_e, {})
-                        total_stock = sum(
-                            v for c_dict in sd_art.get("stock",{}).values()
-                            for v in c_dict.values())
-                        sbc = ("#059669" if total_stock > 5
-                               else "#D97706" if total_stock > 0 else "#DC2626")
-                        with col_ref:
-                            b64 = entry.get("b64_thumb") or sd_art.get("b64_thumb","")
-                            if b64:
-                                photo_html = (f'<img src="data:image/png;base64,{b64}" '
-                                              f'style="width:100%;height:110px;object-fit:cover;'
-                                              f'border-radius:8px;margin-bottom:.5rem;display:block">')
-                            else:
-                                photo_html = (f'<div style="width:100%;height:110px;background:#EEF1F7;'
-                                              f'border-radius:8px;display:flex;align-items:center;'
-                                              f'justify-content:center;font-size:2.5rem;margin-bottom:.5rem">👕</div>')
-                            st.markdown(
-                                f'<div style="background:#FFF;border:2px solid #E0E5EF;'
-                                f'border-radius:12px;padding:.7rem;margin-bottom:.4rem">'
-                                f'{photo_html}'
-                                f'<div style="font-weight:700;color:#1B2B4B;font-size:.82rem;'
-                                f'margin-bottom:.2rem">{entry["model_name"]}</div>'
-                                f'<div style="font-size:.68rem;color:{sbc};font-weight:600">'
-                                f'● {total_stock} pcs en stock</div></div>',
-                                unsafe_allow_html=True)
-                            if st.button("Sélectionner", key=f"vart_{mk_e}",
-                                         use_container_width=True):
-                                clicked_art = mk_e   # ← enregistre sans rerun
+                r0, r1, r2 = st.columns(3)
+                col_cycle = [r0, r1, r2]
+                for idx_a, (mk_e, entry) in enumerate(arts_cat):
+                    sd_art = stock_data_v.get(mk_e, {})
+                    total_stock = sum(
+                        v for c_dict in sd_art.get("stock",{}).values()
+                        for v in c_dict.values())
+                    sbc   = "#059669" if total_stock > 5 else "#D97706" if total_stock > 0 else "#DC2626"
+                    slbl  = f"✅ {total_stock} en stock" if total_stock > 5 else (f"⚠️ {total_stock} restants" if total_stock > 0 else "❌ Épuisé")
+                    b64   = sd_art.get("b64_thumb","") or entry.get("b64_thumb","")
+                    if b64:
+                        photo_html = (f'<img src="data:image/jpeg;base64,{b64}" '
+                                      f'style="width:100%;height:140px;object-fit:cover;'
+                                      f'border-radius:10px;margin-bottom:.6rem;display:block">')
+                    else:
+                        photo_html = (f'<div style="width:100%;height:140px;background:#EEF1F7;'
+                                      f'border-radius:10px;display:flex;align-items:center;'
+                                      f'justify-content:center;font-size:3rem;margin-bottom:.6rem">👕</div>')
+                    with col_cycle[idx_a % 3]:
+                        st.markdown(
+                            f'<div style="background:#FFF;border:2px solid #E0E5EF;'
+                            f'border-radius:14px;padding:.8rem;margin-bottom:.8rem;'
+                            f'box-shadow:0 2px 8px #0001">'
+                            f'{photo_html}'
+                            f'<div style="font-weight:800;color:#1B2B4B;font-size:.95rem;'
+                            f'margin-bottom:.3rem">{entry["model_name"]}</div>'
+                            f'<div style="font-size:.75rem;color:{sbc};font-weight:700">{slbl}</div>'
+                            f'</div>', unsafe_allow_html=True)
+                        if total_stock > 0:
+                            if st.button("Choisir", key=f"vart_{mk_e}", use_container_width=True):
+                                clicked_art = mk_e
+                        else:
+                            st.button("Épuisé", key=f"vart_{mk_e}", disabled=True, use_container_width=True)
 
-            # ── Rerun HORS des colonnes ──
             if clicked_art:
                 st.session_state.v_art_key = clicked_art
                 st.session_state.v_step    = 2
                 st.rerun()
 
-            if st.button("← Retour catégorie", key="vback_cat"):
+            if st.button("← Retour catégories", key="vback_cat"):
                 st.session_state.v_step = 0
                 st.rerun()
 
