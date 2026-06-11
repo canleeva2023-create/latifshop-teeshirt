@@ -2784,11 +2784,45 @@ with tab_ventes:
                                           key="v_note_input")
                 with qc:
                     st.markdown("<div style='height:26px'></div>", unsafe_allow_html=True)
-                    if st.button("→ Confirmer", key="v_go_confirm",
+                    if st.button("✅ Enregistrer la vente", key="v_go_confirm",
                                  use_container_width=True):
-                        st.session_state["v_qty"]  = int(vqty)
-                        st.session_state["v_note"] = vnote
-                        st.session_state.v_step    = 4
+                        qty_v  = int(vqty)
+                        note_v = vnote
+                        dispo_v = sd_art.get("stock",{}).get(color_v,{}).get(sz_sel, 0)
+                        now_v = datetime.now()
+                        vente_rec = {
+                            "date":        now_v.strftime("%d/%m/%Y %H:%M"),
+                            "vendeur":     vendeur_actuel,
+                            "model_key":   mk_v,
+                            "model_name":  art_name,
+                            "couleur":     color_v,
+                            "taille":      sz_sel,
+                            "quantite":    qty_v,
+                            "note":        note_v,
+                            "stock_avant": dispo_v,
+                            "stock_apres": dispo_v - qty_v,
+                        }
+                        if is_online:
+                            save_vente_and_update_stock(vente_rec)
+                            sync_msg = "✅  Vente enregistrée !"
+                        else:
+                            q = load_offline()
+                            q.append(vente_rec)
+                            save_offline(q)
+                            sd_loc = load_stock()
+                            sd_loc.setdefault(mk_v, {}).setdefault("stock", {}).setdefault(color_v, {})
+                            sd_loc[mk_v]["stock"][color_v][sz_sel] = max(
+                                0, sd_loc[mk_v]["stock"][color_v].get(sz_sel, 0) - qty_v)
+                            save_stock(sd_loc)
+                            sync_msg = "🟡  Vente sauvegardée localement"
+                        for k in ["v_step","v_cat","v_art_key","v_color","v_size","v_qty","v_note"]:
+                            st.session_state[k] = 0 if k == "v_step" else None
+                        st.success(sync_msg)
+                        sd2 = load_stock()
+                        ns  = sd2.get(mk_v,{}).get("stock",{}).get(color_v,{}).get(sz_sel, 0)
+                        seuil_v = sd2.get(mk_v,{}).get("seuil_min", 0)
+                        if ns < seuil_v:
+                            st.warning(f"🔔 Stock {color_v}/{sz_sel} sous le seuil ({ns} < {seuil_v}). À commander !")
                         st.rerun()
 
             if st.button("← Retour couleurs", key="vback_col"):
