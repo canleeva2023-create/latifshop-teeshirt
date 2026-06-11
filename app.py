@@ -804,6 +804,14 @@ def img_to_b64(fobj, w=70, h=90):
     buf = BytesIO(); img.save(buf, format="PNG")
     return base64.b64encode(buf.getvalue()).decode()
 
+def make_thumb(fobj):
+    """Miniature très compressée (80×100 JPEG) pour stockage GSheets."""
+    img = Image.open(fobj).convert("RGB")
+    img.thumbnail((80, 100), Image.LANCZOS)
+    buf = BytesIO()
+    img.save(buf, format="JPEG", quality=50, optimize=True)
+    return base64.b64encode(buf.getvalue()).decode()
+
 def wa_button(url, label="Envoyer sur WhatsApp", height=48):
     svg = '<svg width="18" height="18" viewBox="0 0 32 32" fill="white"><path d="M16 2C8.268 2 2 8.268 2 16c0 2.492.664 4.833 1.822 6.854L2 30l7.338-1.797A13.93 13.93 0 0016 30c7.732 0 14-6.268 14-14S23.732 2 16 2zm0 25.5a11.45 11.45 0 01-5.824-1.587l-.418-.248-4.354 1.067 1.097-4.232-.272-.435A11.46 11.46 0 014.5 16C4.5 9.649 9.649 4.5 16 4.5S27.5 9.649 27.5 16 22.351 27.5 16 27.5zm6.29-8.388c-.344-.172-2.036-1.004-2.352-1.118-.316-.115-.546-.172-.776.172-.23.344-.89 1.118-1.09 1.348-.2.23-.4.258-.744.086-.344-.172-1.452-.535-2.766-1.707-1.022-.912-1.712-2.038-1.912-2.382-.2-.344-.021-.53.15-.701.155-.154.344-.402.516-.603.172-.2.23-.344.344-.574.115-.23.058-.43-.029-.603-.086-.172-.776-1.872-1.064-2.563-.28-.672-.564-.58-.776-.59l-.66-.012c-.23 0-.603.086-.918.43-.316.344-1.205 1.176-1.205 2.868s1.233 3.327 1.405 3.557c.172.23 2.426 3.705 5.878 5.196.822.355 1.463.567 1.963.726.824.263 1.574.226 2.167.137.66-.099 2.036-.832 2.323-1.635.287-.803.287-1.492.2-1.635-.086-.143-.316-.23-.66-.402z"/></svg>'
     components.html(f"""<style>.wab{{display:flex;align-items:center;justify-content:center;gap:8px;
@@ -1760,12 +1768,17 @@ if tab_new:
                         for e in errs: st.warning(e)
                     else:
                         photos_data_tmp = []
+                        first_thumb = None
                         if uploaded_files:
                             for f in uploaded_files:
+                                raw = f.read()
+                                b64_display = img_to_b64(BytesIO(raw))
                                 photos_data_tmp.append({
                                     "name": f.name.rsplit(".",1)[0],
-                                    "b64": img_to_b64(f)
+                                    "b64": b64_display
                                 })
+                                if first_thumb is None:
+                                    first_thumb = make_thumb(BytesIO(raw))
                         article = {
                             "model_name": model_name or "Sans nom",
                             "categorie":  selected_cat,
@@ -1773,6 +1786,7 @@ if tab_new:
                             "sizes":      list(selected_sizes),
                             "size_qtys":  dict(size_qtys),
                             "photos":     photos_data_tmp,
+                            "thumb":      first_thumb,
                             "date":       datetime.now().strftime("%d/%m/%Y %H:%M"),
                         }
                         st.session_state.grille_articles.append(article)
@@ -1852,9 +1866,9 @@ if tab_new:
                         saved_names = []
                         for art in st.session_state.grille_articles:
                             mk = model_key(art["model_name"])
-                            # Miniature base64 de la 1ère photo (pour affichage)
-                            b64_thumb_art = (art["photos"][0]["b64"]
-                                             if art.get("photos") else None)
+                            # Miniature compressée (JPEG 80x100) — petite pour GSheets
+                            b64_thumb_art = art.get("thumb") or (
+                                art["photos"][0]["b64"] if art.get("photos") else None)
                             # Sauvegarde entrée historique
                             save_entry({
                                 "date":       art["date"],
