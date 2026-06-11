@@ -66,7 +66,8 @@ HEX_MAP = {c["name"]: c["hex"] for c in COLOR_PALETTE}
 # SESSION STATE
 # ══════════════════════════════════════════════════════════════════════════════
 for key, val in [("user_name", None), ("user_role", None),
-                 ("pin_error", False), ("selected_colors", [])]:
+                 ("pin_error", False), ("selected_colors", []),
+                 ("login_space", None)]:
     if key not in st.session_state:
         st.session_state[key] = val
 
@@ -1008,7 +1009,7 @@ if st.session_state.user_name is None:
 
     # ── Logo centré ──────────────────────────────────────────────────────────
     st.markdown("""
-    <div style="text-align:center;padding:2rem 0 1.5rem">
+    <div style="text-align:center;padding:2rem 0 2rem">
       <div style="font-size:3.5rem">👕</div>
       <div style="font-family:'Space Grotesk',sans-serif;font-size:1.8rem;font-weight:700;
                   color:#1B2B4B;letter-spacing:.04em">LATIF SHOP</div>
@@ -1017,24 +1018,52 @@ if st.session_state.user_name is None:
     </div>
     """, unsafe_allow_html=True)
 
-    # ── Deux espaces côte à côte ─────────────────────────────────────────────
-    col_ventes, col_sep, col_admin = st.columns([5, 0.15, 3])
-
-    # ════ ESPACE VENDEURS ════
-    with col_ventes:
-        st.markdown("""
-        <div style="background:#FFFFFF;border:2px solid #1B2B4B;border-radius:16px;
-                    padding:1.6rem;height:100%">
-          <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1.2rem">
-            <div style="width:36px;height:36px;border-radius:50%;
-                        background:linear-gradient(135deg,#1B2B4B,#2C4270);
-                        display:flex;align-items:center;justify-content:center;
-                        font-size:1.1rem">🧑‍💼</div>
-            <div>
-              <div style="font-weight:700;color:#1B2B4B;font-size:1rem">Espace Vendeurs</div>
-              <div style="font-size:.68rem;color:#8A9AB5">Choisissez votre nom</div>
+    # ════════════════════════════════════════════════════════
+    # VUE 1 — Choix de l'espace (deux grandes cartes)
+    # ════════════════════════════════════════════════════════
+    if st.session_state.login_space is None:
+        _, c1, gap, c2, _ = st.columns([1, 3, 0.3, 3, 1])
+        with c1:
+            st.markdown("""
+            <div style="background:#FFFFFF;border:3px solid #1B2B4B;border-radius:20px;
+                        padding:2.5rem 1.5rem;text-align:center;cursor:pointer;
+                        box-shadow:0 4px 24px rgba(27,43,75,.12)">
+              <div style="font-size:3rem;margin-bottom:.8rem">🧑‍💼</div>
+              <div style="font-family:'Space Grotesk',sans-serif;font-size:1.2rem;
+                          font-weight:700;color:#1B2B4B">Espace Vendeurs</div>
+              <div style="font-size:.75rem;color:#8A9AB5;margin-top:.4rem">
+                Saisir les ventes</div>
             </div>
-          </div>
+            """, unsafe_allow_html=True)
+            if st.button("Entrer →", key="btn_space_vendeur", use_container_width=True):
+                st.session_state.login_space = "vendeur"
+                st.rerun()
+
+        with c2:
+            st.markdown("""
+            <div style="background:#FFFFFF;border:3px solid #C09020;border-radius:20px;
+                        padding:2.5rem 1.5rem;text-align:center;cursor:pointer;
+                        box-shadow:0 4px 24px rgba(192,144,32,.15)">
+              <div style="font-size:3rem;margin-bottom:.8rem">👑</div>
+              <div style="font-family:'Space Grotesk',sans-serif;font-size:1.2rem;
+                          font-weight:700;color:#1B2B4B">Espace Admin</div>
+              <div style="font-size:.75rem;color:#8A9AB5;margin-top:.4rem">
+                Gestion &amp; stock</div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("Entrer →", key="btn_space_admin", use_container_width=True):
+                st.session_state.login_space = "admin"
+                st.rerun()
+
+    # ════════════════════════════════════════════════════════
+    # VUE 2A — Espace Vendeurs : liste des noms
+    # ════════════════════════════════════════════════════════
+    elif st.session_state.login_space == "vendeur":
+        st.markdown("""
+        <div style="text-align:center;margin-bottom:1.4rem">
+          <span style="background:#1B2B4B;color:#FFF;font-size:.72rem;font-weight:600;
+                       letter-spacing:.15em;text-transform:uppercase;
+                       padding:.4rem 1.2rem;border-radius:100px">🧑‍💼 Espace Vendeurs</span>
         </div>
         """, unsafe_allow_html=True)
 
@@ -1049,51 +1078,50 @@ if st.session_state.user_name is None:
                     if st.button(nom, key=f"login_{nom}", use_container_width=True):
                         st.session_state.user_name = nom
                         st.session_state.user_role = "vendeur"
+                        st.session_state.login_space = None
                         st.rerun()
         else:
-            st.markdown(
-                '<p style="text-align:center;color:var(--text3);font-style:italic;'
-                'font-size:.85rem;padding:1rem">Aucun vendeur enregistré.</p>',
-                unsafe_allow_html=True)
+            st.info("Aucun vendeur enregistré. Connectez-vous en admin pour en ajouter.")
 
-    # ════ SÉPARATEUR VERTICAL ════
-    with col_sep:
-        st.markdown("""
-        <div style="width:2px;background:linear-gradient(to bottom,transparent,#E0E5EF,transparent);
-                    height:320px;margin:0 auto"></div>
-        """, unsafe_allow_html=True)
+        st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
+        if st.button("← Retour", key="back_vendeur"):
+            st.session_state.login_space = None
+            st.rerun()
 
-    # ════ ESPACE ADMIN ════
-    with col_admin:
+    # ════════════════════════════════════════════════════════
+    # VUE 2B — Espace Admin : PIN
+    # ════════════════════════════════════════════════════════
+    elif st.session_state.login_space == "admin":
         st.markdown("""
-        <div style="background:#FFFFFF;border:2px solid #C09020;border-radius:16px;
-                    padding:1.6rem">
-          <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1.4rem">
-            <div style="width:36px;height:36px;border-radius:50%;
-                        background:linear-gradient(135deg,#C09020,#E0B030);
-                        display:flex;align-items:center;justify-content:center;
-                        font-size:1.1rem">👑</div>
-            <div>
-              <div style="font-weight:700;color:#1B2B4B;font-size:1rem">Espace Admin</div>
-              <div style="font-size:.68rem;color:#8A9AB5">Accès administrateur</div>
-            </div>
-          </div>
+        <div style="text-align:center;margin-bottom:1.4rem">
+          <span style="background:#C09020;color:#FFF;font-size:.72rem;font-weight:600;
+                       letter-spacing:.15em;text-transform:uppercase;
+                       padding:.4rem 1.2rem;border-radius:100px">👑 Espace Admin</span>
         </div>
         """, unsafe_allow_html=True)
 
-        pin = st.text_input("Code PIN", type="password", placeholder="• • • •",
-                            label_visibility="visible", key="pin_input")
-        if st.button("🔐  Connexion Admin", use_container_width=True, key="btn_admin"):
-            if pin == profils_data.get("admin_pin", "1234"):
-                st.session_state.user_name = "Admin"
-                st.session_state.user_role = "admin"
-                st.session_state.pin_error = False
-                st.rerun()
-            else:
-                st.session_state.pin_error = True
-                st.rerun()
-        if st.session_state.pin_error:
-            st.error("❌  Code PIN incorrect.")
+        _, pin_col, _ = st.columns([1, 2, 1])
+        with pin_col:
+            pin = st.text_input("Code PIN", type="password", placeholder="• • • •",
+                                label_visibility="visible", key="pin_input")
+            if st.button("🔐  Connexion Admin", use_container_width=True, key="btn_admin"):
+                if pin == profils_data.get("admin_pin", "1234"):
+                    st.session_state.user_name = "Admin"
+                    st.session_state.user_role = "admin"
+                    st.session_state.pin_error = False
+                    st.session_state.login_space = None
+                    st.rerun()
+                else:
+                    st.session_state.pin_error = True
+                    st.rerun()
+            if st.session_state.pin_error:
+                st.error("❌  Code PIN incorrect.")
+
+        st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
+        if st.button("← Retour", key="back_admin"):
+            st.session_state.pin_error = False
+            st.session_state.login_space = None
+            st.rerun()
 
     st.stop()
 
