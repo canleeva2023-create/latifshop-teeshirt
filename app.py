@@ -1006,55 +1006,82 @@ if st.session_state.user_name is None:
     profils_data = load_profils()
     vendeurs = profils_data.get("vendeurs", [])
 
-    # ── Carte de connexion centrée ───────────────────────────────────────────
-    _, center_col, _ = st.columns([1, 2, 1])
-    with center_col:
+    # ── Logo centré ──────────────────────────────────────────────────────────
+    st.markdown("""
+    <div style="text-align:center;padding:2rem 0 1.5rem">
+      <div style="font-size:3.5rem">👕</div>
+      <div style="font-family:'Space Grotesk',sans-serif;font-size:1.8rem;font-weight:700;
+                  color:#1B2B4B;letter-spacing:.04em">LATIF SHOP</div>
+      <div style="font-size:.72rem;color:#8A9AB5;letter-spacing:.18em;
+                  text-transform:uppercase;margin-top:.3rem">Gestion Inventaire &amp; Ventes</div>
+    </div>
+    """, unsafe_allow_html=True)
+
+    # ── Deux espaces côte à côte ─────────────────────────────────────────────
+    col_ventes, col_sep, col_admin = st.columns([5, 0.15, 3])
+
+    # ════ ESPACE VENDEURS ════
+    with col_ventes:
         st.markdown("""
-        <div class="login-card">
-          <div class="login-logo">👕</div>
-          <div class="login-title">LATIF SHOP</div>
-          <div class="login-sub">Gestion Inventaire &amp; Ventes</div>
+        <div style="background:#FFFFFF;border:2px solid #1B2B4B;border-radius:16px;
+                    padding:1.6rem;height:100%">
+          <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1.2rem">
+            <div style="width:36px;height:36px;border-radius:50%;
+                        background:linear-gradient(135deg,#1B2B4B,#2C4270);
+                        display:flex;align-items:center;justify-content:center;
+                        font-size:1.1rem">🧑‍💼</div>
+            <div>
+              <div style="font-weight:700;color:#1B2B4B;font-size:1rem">Espace Vendeurs</div>
+              <div style="font-size:.68rem;color:#8A9AB5">Choisissez votre nom</div>
+            </div>
+          </div>
         </div>
         """, unsafe_allow_html=True)
 
-    st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
+        if vendeurs:
+            nb = min(len(vendeurs), 4)
+            cols_v = st.columns(nb)
+            for i, nom in enumerate(vendeurs):
+                with cols_v[i % nb]:
+                    ini = "".join(p[0].upper() for p in nom.split()[:2])
+                    st.markdown(f'<div class="profil-avatar">{ini}</div>',
+                                unsafe_allow_html=True)
+                    if st.button(nom, key=f"login_{nom}", use_container_width=True):
+                        st.session_state.user_name = nom
+                        st.session_state.user_role = "vendeur"
+                        st.rerun()
+        else:
+            st.markdown(
+                '<p style="text-align:center;color:var(--text3);font-style:italic;'
+                'font-size:.85rem;padding:1rem">Aucun vendeur enregistré.</p>',
+                unsafe_allow_html=True)
 
-    # ── Grille vendeurs ──────────────────────────────────────────────────────
-    if vendeurs:
-        st.markdown(
-            '<p style="text-align:center;font-size:.7rem;letter-spacing:.2em;'
-            'text-transform:uppercase;color:var(--text3);margin-bottom:1rem">'
-            '👤  Choisissez votre profil</p>', unsafe_allow_html=True)
-        nb = min(len(vendeurs), 4)
-        cols_v = st.columns(nb)
-        for i, nom in enumerate(vendeurs):
-            with cols_v[i % nb]:
-                ini = "".join(p[0].upper() for p in nom.split()[:2])
-                st.markdown(f'<div class="profil-avatar">{ini}</div>', unsafe_allow_html=True)
-                if st.button(nom, key=f"login_{nom}", use_container_width=True):
-                    st.session_state.user_name = nom
-                    st.session_state.user_role = "vendeur"
-                    st.rerun()
-    else:
-        st.markdown(
-            '<p style="text-align:center;color:var(--text3);font-style:italic;font-size:.85rem">'
-            'Aucun vendeur — connectez-vous en tant qu\'admin pour en ajouter.</p>',
-            unsafe_allow_html=True)
+    # ════ SÉPARATEUR VERTICAL ════
+    with col_sep:
+        st.markdown("""
+        <div style="width:2px;background:linear-gradient(to bottom,transparent,#E0E5EF,transparent);
+                    height:320px;margin:0 auto"></div>
+        """, unsafe_allow_html=True)
 
-    # ── Séparateur ────────────────────────────────────────────────────────────
-    st.markdown("""
-    <div style="display:flex;align-items:center;gap:1rem;margin:2rem 0">
-      <div style="flex:1;height:1px;background:var(--border)"></div>
-      <span style="color:var(--text3);font-size:.72rem;letter-spacing:.15em;text-transform:uppercase">
-        Accès administrateur
-      </span>
-      <div style="flex:1;height:1px;background:var(--border)"></div>
-    </div>""", unsafe_allow_html=True)
+    # ════ ESPACE ADMIN ════
+    with col_admin:
+        st.markdown("""
+        <div style="background:#FFFFFF;border:2px solid #C09020;border-radius:16px;
+                    padding:1.6rem">
+          <div style="display:flex;align-items:center;gap:.6rem;margin-bottom:1.4rem">
+            <div style="width:36px;height:36px;border-radius:50%;
+                        background:linear-gradient(135deg,#C09020,#E0B030);
+                        display:flex;align-items:center;justify-content:center;
+                        font-size:1.1rem">👑</div>
+            <div>
+              <div style="font-weight:700;color:#1B2B4B;font-size:1rem">Espace Admin</div>
+              <div style="font-size:.68rem;color:#8A9AB5">Accès administrateur</div>
+            </div>
+          </div>
+        </div>
+        """, unsafe_allow_html=True)
 
-    # ── PIN admin ─────────────────────────────────────────────────────────────
-    _, pin_col, _ = st.columns([1, 2, 1])
-    with pin_col:
-        pin = st.text_input("Code PIN admin", type="password", placeholder="• • • •",
+        pin = st.text_input("Code PIN", type="password", placeholder="• • • •",
                             label_visibility="visible", key="pin_input")
         if st.button("🔐  Connexion Admin", use_container_width=True, key="btn_admin"):
             if pin == profils_data.get("admin_pin", "1234"):
@@ -1067,6 +1094,7 @@ if st.session_state.user_name is None:
                 st.rerun()
         if st.session_state.pin_error:
             st.error("❌  Code PIN incorrect.")
+
     st.stop()
 
 # ══════════════════════════════════════════════════════════════════════════════
