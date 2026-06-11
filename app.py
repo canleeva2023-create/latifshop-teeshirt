@@ -2942,83 +2942,80 @@ with tab_ventes:
     if is_admin:
         import calendar as _cal
         ventes_cal = load_ventes()
-        now_cal = datetime.now()
+        now_cal    = datetime.now()
 
-        # Mois affiché (par défaut = mois courant)
         if st.session_state.v_admin_month is None:
             st.session_state.v_admin_month = (now_cal.year, now_cal.month)
         yr_v, mo_v = st.session_state.v_admin_month
 
-        # Navigation mois
+        # ── Navigation mois ─────────────────────────────────────────────────
         nav1, nav2, nav3 = st.columns([1, 3, 1])
         with nav1:
-            if st.button("◀ Mois précédent", key="v_cal_prev", use_container_width=True):
-                mo2 = mo_v - 1
-                yr2 = yr_v if mo2 > 0 else yr_v - 1
-                mo2 = mo2 if mo2 > 0 else 12
-                st.session_state.v_admin_month = (yr2, mo2)
-                st.session_state.v_admin_date = None
-                st.rerun()
+            if st.button("◀ Précédent", key="v_cal_prev", use_container_width=True):
+                mo2 = mo_v - 1; yr2 = yr_v if mo2 > 0 else yr_v - 1; mo2 = mo2 if mo2 > 0 else 12
+                st.session_state.v_admin_month = (yr2, mo2); st.session_state.v_admin_date = None; st.rerun()
         with nav2:
-            st.markdown(
-                f'<div style="text-align:center;font-family:Space Grotesk,sans-serif;'
-                f'font-size:1.2rem;font-weight:700;color:#1B2B4B;padding:.5rem">'
-                f'{_cal.month_name[mo_v].capitalize()} {yr_v}</div>',
-                unsafe_allow_html=True)
+            mois_fr = ["","Janvier","Février","Mars","Avril","Mai","Juin","Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
+            st.markdown(f'<div style="text-align:center;font-size:1.2rem;font-weight:700;color:#1B2B4B;padding:.4rem">{mois_fr[mo_v]} {yr_v}</div>', unsafe_allow_html=True)
         with nav3:
-            if st.button("Mois suivant ▶", key="v_cal_next", use_container_width=True):
-                mo2 = mo_v + 1
-                yr2 = yr_v if mo2 <= 12 else yr_v + 1
-                mo2 = mo2 if mo2 <= 12 else 1
-                st.session_state.v_admin_month = (yr2, mo2)
-                st.session_state.v_admin_date = None
-                st.rerun()
+            if st.button("Suivant ▶", key="v_cal_next", use_container_width=True):
+                mo2 = mo_v + 1; yr2 = yr_v if mo2 <= 12 else yr_v + 1; mo2 = mo2 if mo2 <= 12 else 1
+                st.session_state.v_admin_month = (yr2, mo2); st.session_state.v_admin_date = None; st.rerun()
 
-        # Index ventes par jour pour ce mois
+        # ── Index ventes par jour ────────────────────────────────────────────
         ventes_par_jour = {}
         for v in ventes_cal:
             ds = v.get("date","")[:10]
             try:
                 dobj = datetime.strptime(ds, "%d/%m/%Y")
                 if dobj.year == yr_v and dobj.month == mo_v:
-                    key_d = ds
-                    ventes_par_jour.setdefault(key_d, []).append(v)
+                    ventes_par_jour.setdefault(ds, []).append(v)
             except: pass
 
-        # Affichage calendrier
-        jours_semaine = ["Lun", "Mar", "Mer", "Jeu", "Ven", "Sam", "Dim"]
-        header_html = '<div style="display:grid;grid-template-columns:repeat(7,1fr);gap:4px;margin-bottom:4px">'
-        for j in jours_semaine:
-            header_html += f'<div style="text-align:center;font-size:.7rem;font-weight:700;color:#8A9AB5;padding:.3rem">{j}</div>'
-        header_html += '</div>'
-        st.markdown(header_html, unsafe_allow_html=True)
+        # ── En-têtes jours semaine ───────────────────────────────────────────
+        jours_fr = ["Lun","Mar","Mer","Jeu","Ven","Sam","Dim"]
+        cols_hdr = st.columns(7)
+        for ji, jn in enumerate(jours_fr):
+            cols_hdr[ji].markdown(f'<div style="text-align:center;font-size:.72rem;font-weight:700;color:#8A9AB5;padding:.2rem 0">{jn}</div>', unsafe_allow_html=True)
 
-        cal_matrix = _cal.monthcalendar(yr_v, mo_v)
-        selected_d = st.session_state.v_admin_date
-
+        # ── Grille jours ─────────────────────────────────────────────────────
+        cal_matrix   = _cal.monthcalendar(yr_v, mo_v)
+        selected_d   = st.session_state.v_admin_date
         clicked_day_v = None
+
         for week in cal_matrix:
             week_cols = st.columns(7)
             for wi, day in enumerate(week):
                 with week_cols[wi]:
                     if day == 0:
-                        st.markdown('<div style="height:52px"></div>', unsafe_allow_html=True)
+                        st.markdown('<div style="height:60px"></div>', unsafe_allow_html=True)
                         continue
-                    day_str = f"{day:02d}/{mo_v:02d}/{yr_v}"
-                    nb_v_day = len(ventes_par_jour.get(day_str, []))
-                    is_today = (day == now_cal.day and mo_v == now_cal.month and yr_v == now_cal.year)
-                    is_sel   = (day_str == selected_d)
-                    border   = "3px solid #2563EB" if is_sel else ("2px solid #1B2B4B" if is_today else "1px solid #E0E5EF")
-                    bg       = "#EEF4FF" if is_sel else ("#F4F6FA" if is_today else "#FFF")
-                    dot      = f'<div style="width:8px;height:8px;border-radius:50%;background:#059669;margin:2px auto 0"></div>' if nb_v_day > 0 else ""
-                    badge    = f'<div style="font-size:.6rem;color:#059669;font-weight:700">{nb_v_day}v</div>' if nb_v_day > 0 else ""
+                    day_str   = f"{day:02d}/{mo_v:02d}/{yr_v}"
+                    nb_v_day  = len(ventes_par_jour.get(day_str, []))
+                    is_today  = (day == now_cal.day and mo_v == now_cal.month and yr_v == now_cal.year)
+                    is_sel    = (day_str == selected_d)
+                    # Couleur du bouton selon état
+                    if is_sel:
+                        style = "background:#1B2B4B;color:#FFF;border:2px solid #1B2B4B;"
+                    elif is_today:
+                        style = "background:#EEF4FF;color:#1B2B4B;border:2px solid #2563EB;font-weight:700;"
+                    elif nb_v_day > 0:
+                        style = "background:#F0FDF4;color:#065F46;border:2px solid #059669;"
+                    else:
+                        style = "background:#F8F9FC;color:#8A9AB5;border:1px solid #E0E5EF;"
+
+                    label = f"{day}" + (f"\n● {nb_v_day}" if nb_v_day > 0 else "")
                     st.markdown(
-                        f'<div style="background:{bg};border:{border};border-radius:10px;'
-                        f'padding:.3rem;text-align:center;min-height:52px">'
-                        f'<div style="font-weight:{"700" if is_today else "500"};color:#1B2B4B;font-size:.9rem">{day}</div>'
-                        f'{badge}{dot}</div>', unsafe_allow_html=True)
-                    if st.button("　", key=f"v_day_{day}", use_container_width=True,
-                                 help=f"{nb_v_day} vente(s)"):
+                        f'<div style="{style}border-radius:10px;padding:.4rem .2rem;'
+                        f'text-align:center;font-size:.85rem;font-weight:600;'
+                        f'min-height:58px;display:flex;flex-direction:column;'
+                        f'align-items:center;justify-content:center;gap:2px">'
+                        f'<span>{day}</span>'
+                        f'{"<span style=\"font-size:.6rem;font-weight:700\">● "+str(nb_v_day)+" vente(s)</span>" if nb_v_day>0 else ""}'
+                        f'</div>', unsafe_allow_html=True)
+                    if st.button(f"{day}", key=f"v_day_{yr_v}_{mo_v}_{day}",
+                                 use_container_width=True,
+                                 help=f"{'Cliquez pour voir les ' + str(nb_v_day) + ' vente(s)' if nb_v_day>0 else 'Aucune vente'}"):
                         clicked_day_v = day_str
 
         if clicked_day_v:
@@ -3028,23 +3025,20 @@ with tab_ventes:
         # ── Statistiques du jour sélectionné ────────────────────────────────
         if selected_d:
             ventes_jour = ventes_par_jour.get(selected_d, [])
-            st.markdown(f"<hr>", unsafe_allow_html=True)
+            st.markdown("<hr>", unsafe_allow_html=True)
             st.markdown(
-                f'<div style="font-family:Space Grotesk,sans-serif;font-size:1.1rem;'
-                f'font-weight:700;color:#1B2B4B;margin-bottom:1rem">📊 Statistiques — {selected_d}</div>',
-                unsafe_allow_html=True)
+                f'<div style="font-size:1.1rem;font-weight:700;color:#1B2B4B;margin-bottom:1rem">'
+                f'📊 Statistiques — {selected_d}</div>', unsafe_allow_html=True)
 
             if not ventes_jour:
-                st.info("Aucune vente ce jour.")
+                st.info("Aucune vente enregistrée ce jour.")
             else:
-                pieces_j = sum(v.get("quantite",1) for v in ventes_jour)
+                pieces_j  = sum(v.get("quantite",1) for v in ventes_jour)
                 sm1, sm2, sm3 = st.columns(3)
-                sm1.metric("Transactions", len(ventes_jour))
-                sm2.metric("Pièces vendues", pieces_j)
-                vendeurs_j = len(set(v.get("vendeur","") for v in ventes_jour))
-                sm3.metric("Vendeurs actifs", vendeurs_j)
+                sm1.metric("💰 Transactions", len(ventes_jour))
+                sm2.metric("👕 Pièces vendues", pieces_j)
+                sm3.metric("🧑‍💼 Vendeurs actifs", len(set(v.get("vendeur","") for v in ventes_jour)))
 
-                # Par vendeur
                 st.markdown("**Par vendeur :**")
                 agg_vj = {}
                 for v in ventes_jour:
@@ -3052,29 +3046,26 @@ with tab_ventes:
                 for vnd, qty in sorted(agg_vj.items(), key=lambda x:-x[1]):
                     ini_vnd = "".join(p[0].upper() for p in vnd.split()[:2])
                     st.markdown(
-                        f'<div style="display:flex;align-items:center;gap:.8rem;'
-                        f'background:#F8F9FC;border-radius:8px;padding:.5rem .8rem;margin-bottom:.3rem">'
+                        f'<div style="display:flex;align-items:center;gap:.8rem;background:#F8F9FC;'
+                        f'border-radius:8px;padding:.5rem .8rem;margin-bottom:.3rem">'
                         f'<div class="profil-avatar" style="width:30px;height:30px;font-size:.7rem;min-width:30px">{ini_vnd}</div>'
                         f'<strong style="color:#1B2B4B">{vnd}</strong>'
                         f'<span style="margin-left:auto;color:#059669;font-weight:700">{qty} pcs</span></div>',
                         unsafe_allow_html=True)
 
-                # Détail ventes
                 st.markdown("**Détail des ventes :**")
                 for v in ventes_jour:
                     hx_v2 = HEX_MAP.get(v.get("couleur",""),"#888")
                     st.markdown(
                         f'<div style="background:#FFF;border:1px solid #E0E5EF;border-radius:8px;'
-                        f'padding:.6rem 1rem;margin-bottom:.3rem;display:flex;'
-                        f'align-items:center;justify-content:space-between">'
+                        f'padding:.6rem 1rem;margin-bottom:.3rem;display:flex;align-items:center;justify-content:space-between">'
                         f'<div><strong style="color:#1B2B4B">{v.get("model_name","?")}</strong> '
-                        f'<span style="display:inline-flex;align-items:center;gap:4px;font-size:.78rem">'
+                        f'<span style="font-size:.78rem;display:inline-flex;align-items:center;gap:4px">'
                         f'<span style="width:10px;height:10px;border-radius:50%;background:{hx_v2};display:inline-block"></span>'
                         f'{v.get("couleur","?")} · {v.get("taille","?")}</span></div>'
                         f'<div style="text-align:right"><span style="color:#2563EB;font-weight:700">×{v.get("quantite",1)}</span>'
                         f'<div style="font-size:.65rem;color:#8A9AB5">{v.get("vendeur","?")}</div></div></div>',
                         unsafe_allow_html=True)
-        st.stop()
 
     # ── Init session state du flux vente ─────────────────────────────────────
     for k, v in [("v_step", 0), ("v_cat", None), ("v_art_key", None),
@@ -3953,11 +3944,15 @@ if tab_ali_admin:
                         dot_a    = '<div style="width:8px;height:8px;border-radius:50%;background:#059669;margin:2px auto 0"></div>' if nb_a > 0 else ""
                         st.markdown(
                             f'<div style="background:{bg_a};border:{border_a};border-radius:10px;'
-                            f'padding:.3rem;text-align:center;min-height:52px">'
-                            f'<div style="font-weight:{"700" if is_today_a else "500"};color:#1B2B4B;font-size:.9rem">{day_a}</div>'
-                            f'{badge_a}{dot_a}</div>', unsafe_allow_html=True)
-                        if st.button("　", key=f"ali_day_{day_a}", use_container_width=True,
-                                     help=f"{nb_a} alimentation(s)"):
+                            f'padding:.4rem .2rem;text-align:center;font-size:.85rem;font-weight:600;'
+                            f'min-height:58px;display:flex;flex-direction:column;'
+                            f'align-items:center;justify-content:center;gap:2px">'
+                            f'<span style="font-weight:{"700" if is_today_a else "500"};color:#1B2B4B">{day_a}</span>'
+                            f'{"<span style=\"font-size:.6rem;font-weight:700;color:#059669\">● "+str(nb_a)+" ali</span>" if nb_a>0 else ""}'
+                            f'</div>', unsafe_allow_html=True)
+                        if st.button(f"{day_a}", key=f"ali_day_{yr_a}_{mo_a}_{day_a}",
+                                     use_container_width=True,
+                                     help=f"{'Cliquez — '+str(nb_a)+' alimentation(s)' if nb_a>0 else 'Aucune alimentation'}"):
                             clicked_day_a = day_str_a
 
             if clicked_day_a:
