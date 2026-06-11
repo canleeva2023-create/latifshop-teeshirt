@@ -2627,12 +2627,19 @@ with tab_ventes:
                         sbc = ("#059669" if total_stock > 5
                                else "#D97706" if total_stock > 0 else "#DC2626")
                         with col_ref:
+                            b64 = entry.get("b64_thumb") or sd_art.get("b64_thumb","")
+                            if b64:
+                                photo_html = (f'<img src="data:image/png;base64,{b64}" '
+                                              f'style="width:100%;height:110px;object-fit:cover;'
+                                              f'border-radius:8px;margin-bottom:.5rem;display:block">')
+                            else:
+                                photo_html = (f'<div style="width:100%;height:110px;background:#EEF1F7;'
+                                              f'border-radius:8px;display:flex;align-items:center;'
+                                              f'justify-content:center;font-size:2.5rem;margin-bottom:.5rem">👕</div>')
                             st.markdown(
                                 f'<div style="background:#FFF;border:2px solid #E0E5EF;'
                                 f'border-radius:12px;padding:.7rem;margin-bottom:.4rem">'
-                                f'<div style="width:100%;height:110px;background:#EEF1F7;'
-                                f'border-radius:8px;display:flex;align-items:center;'
-                                f'justify-content:center;font-size:2.5rem;margin-bottom:.5rem">👕</div>'
+                                f'{photo_html}'
                                 f'<div style="font-weight:700;color:#1B2B4B;font-size:.82rem;'
                                 f'margin-bottom:.2rem">{entry["model_name"]}</div>'
                                 f'<div style="font-size:.68rem;color:{sbc};font-weight:600">'
