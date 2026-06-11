@@ -1892,6 +1892,7 @@ if tab_new:
                                                  for s in art["sizes"]}
                             stock_data_new[mk] = {
                                 "model_name":  art["model_name"],
+                                "categorie":   art["categorie"],
                                 "colors":      art["colors"],
                                 "sizes":       art["sizes"],
                                 "seuil_min":   2,
@@ -3256,17 +3257,27 @@ with tab_ventes:
                 '<div style="font-size:1.1rem;font-weight:800;color:#1B2B4B;margin-bottom:1rem">'
                 '👕 Choisissez un article</div>', unsafe_allow_html=True)
 
-            arts_cat = []
-            seen_mk  = set()
+            # Index catégorie depuis l'historique pour les anciens articles
+            hist_cat_idx = {}
             for e in history_v:
-                mk_e = model_key(e["model_name"])
-                if mk_e in seen_mk or mk_e not in stock_data_v:
+                mk_e2 = model_key(e["model_name"])
+                if mk_e2 not in hist_cat_idx:
+                    hist_cat_idx[mk_e2] = e.get("categorie","") or ""
+
+            arts_cat = []
+            sel_cat = st.session_state.v_cat
+            for mk_e, sd_e in stock_data_v.items():
+                # Catégorie depuis le stock (nouveaux articles) ou depuis l'historique (anciens)
+                ec = sd_e.get("categorie","") or hist_cat_idx.get(mk_e, "")
+                if sel_cat != "Toutes" and ec.strip().lower() != sel_cat.strip().lower():
                     continue
-                ec = e.get("categorie","") or ""
-                if st.session_state.v_cat != "Toutes" and ec != st.session_state.v_cat:
-                    continue
-                seen_mk.add(mk_e)
-                arts_cat.append((mk_e, e))
+                # Créer une entrée synthétique compatible avec le reste du code
+                entry_synth = {
+                    "model_name": sd_e.get("model_name", mk_e),
+                    "categorie":  ec,
+                    "b64_thumb":  sd_e.get("b64_thumb",""),
+                }
+                arts_cat.append((mk_e, entry_synth))
 
             # Tri par popularité
             ventes_count_v = {}
@@ -3610,13 +3621,12 @@ with tab_ventes:
             f'dès que la connexion sera rétablie.</span></div>',
             unsafe_allow_html=True)
 
-    st.markdown("<hr>", unsafe_allow_html=True)
-
     # ══════════════════════════════════════════════════════════════════════════
-    # CLASSEMENT DES ARTICLES LES PLUS VENDUS
+    # CLASSEMENT + RAPPORT — uniquement à l'étape 0 ou pour l'admin
     # ══════════════════════════════════════════════════════════════════════════
-    ventes_rank=load_ventes()
-    if ventes_rank:
+    if st.session_state.get("v_step", 0) == 0 or is_admin:
+        st.markdown("<hr>", unsafe_allow_html=True)
+        ventes_rank = load_ventes()
         st.markdown("### 🏆 Classement des articles les plus vendus")
 
         # Filtre période
@@ -3718,30 +3728,28 @@ with tab_ventes:
                 "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
                 use_container_width=False)
 
-    # ══════════════════════════════════════════════════════════════════════════
-    # RAPPORT JOURNALIER
-    # ══════════════════════════════════════════════════════════════════════════
-    st.markdown("<hr>",unsafe_allow_html=True)
-    st.markdown("### 📋 Rapport journalier")
-    today_str = datetime.now().strftime("%d/%m/%Y")
-    ventes_jour = [v for v in load_ventes() if v.get("date","").startswith(today_str)]
-    pcs_jour = sum(v.get("quantite",1) for v in ventes_jour)
+        # ── Rapport journalier ───────────────────────────────────────────────
+        st.markdown("<hr>",unsafe_allow_html=True)
+        st.markdown("### 📋 Rapport journalier")
+        today_str = datetime.now().strftime("%d/%m/%Y")
+        ventes_jour = [v for v in load_ventes() if v.get("date","").startswith(today_str)]
+        pcs_jour = sum(v.get("quantite",1) for v in ventes_jour)
 
-    rj1,rj2,rj3 = st.columns(3)
-    rj1.metric("Transactions aujourd'hui", len(ventes_jour))
-    rj2.metric("Pièces vendues aujourd'hui", pcs_jour)
-    rj3.metric("Vendeurs actifs", len(set(v.get("vendeur","") for v in ventes_jour)))
+        rj1,rj2,rj3 = st.columns(3)
+        rj1.metric("Transactions aujourd'hui", len(ventes_jour))
+        rj2.metric("Pièces vendues aujourd'hui", pcs_jour)
+        rj3.metric("Vendeurs actifs", len(set(v.get("vendeur","") for v in ventes_jour)))
 
-    col_rj1, col_rj2 = st.columns(2)
-    with col_rj1:
-        rapport_txt = build_rapport_journalier()
-        wa_rapport = "https://wa.me/?text=" + urllib.parse.quote(rapport_txt)
-        wa_button(wa_rapport, label="📤  Envoyer le rapport sur WhatsApp")
-    with col_rj2:
-        st.download_button("📥  Télécharger le rapport (TXT)",
-            rapport_txt.encode("utf-8"),
-            f"rapport_{datetime.now().strftime('%Y%m%d')}.txt",
-            "text/plain", use_container_width=True)
+        col_rj1, col_rj2 = st.columns(2)
+        with col_rj1:
+            rapport_txt = build_rapport_journalier()
+            wa_rapport = "https://wa.me/?text=" + urllib.parse.quote(rapport_txt)
+            wa_button(wa_rapport, label="📤  Envoyer le rapport sur WhatsApp")
+        with col_rj2:
+            st.download_button("📥  Télécharger le rapport (TXT)",
+                rapport_txt.encode("utf-8"),
+                f"rapport_{datetime.now().strftime('%Y%m%d')}.txt",
+                "text/plain", use_container_width=True)
 
     # ══════════════════════════════════════════════════════════════════════════
     # ARTICLES À ROTATION LENTE
