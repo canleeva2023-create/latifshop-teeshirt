@@ -30,9 +30,12 @@ STOCK_FILE       = "stock.json"
 VENTES_FILE      = "ventes.json"
 PROFILS_FILE     = "profils.json"
 ARRIVAGES_FILE   = "arrivages.json"
-CATEGORIES_FILE  = "categories.json"
+CATEGORIES_FILE          = "categories.json"
+ALIMENTATION_PENDING_FILE = "alimentation_pending.json"
+ALIMENTATION_HIST_FILE    = "alimentation_historique.json"
 ALL_DATA_FILES   = [SAVE_FILE, STOCK_FILE, VENTES_FILE, PROFILS_FILE,
-                    ARRIVAGES_FILE, CATEGORIES_FILE]
+                    ARRIVAGES_FILE, CATEGORIES_FILE,
+                    ALIMENTATION_PENDING_FILE, ALIMENTATION_HIST_FILE]
 
 # ══════════════════════════════════════════════════════════════════════════════
 # PALETTE COULEURS
@@ -65,9 +68,20 @@ HEX_MAP = {c["name"]: c["hex"] for c in COLOR_PALETTE}
 # ══════════════════════════════════════════════════════════════════════════════
 # SESSION STATE
 # ══════════════════════════════════════════════════════════════════════════════
-for key, val in [("user_name", None), ("user_role", None),
-                 ("pin_error", False), ("selected_colors", []),
-                 ("login_space", None)]:
+for key, val in [
+        ("user_name", None), ("user_role", None),
+        ("pin_error", False), ("selected_colors", []),
+        ("login_space", None),
+        # Alimentation flow
+        ("ali_step", 0), ("ali_cat", None), ("ali_art_key", None),
+        ("ali_qtys", {}), ("ali_livreur", ""), ("ali_pin_error", False),
+        # Edition catégories
+        ("edit_cat_idx", None),
+        # Edition vendeurs
+        ("edit_vend_idx", None),
+        # Alimentation admin: modification avant approbation
+        ("ali_edit_idx", None),
+]:
     if key not in st.session_state:
         st.session_state[key] = val
 
@@ -617,8 +631,12 @@ def load_history():   return _load(SAVE_FILE, [])
 def load_stock():     return _load(STOCK_FILE, {})
 def load_ventes():    return _load(VENTES_FILE, [])
 def load_arrivages():    return _load(ARRIVAGES_FILE, [])
-def load_categories():   return _load(CATEGORIES_FILE, [])
-def save_categories(d):  _save(CATEGORIES_FILE, d)
+def load_categories():      return _load(CATEGORIES_FILE, [])
+def save_categories(d):     _save(CATEGORIES_FILE, d)
+def load_ali_pending():     return _load(ALIMENTATION_PENDING_FILE, [])
+def save_ali_pending(d):    _save(ALIMENTATION_PENDING_FILE, d)
+def load_ali_hist():        return _load(ALIMENTATION_HIST_FILE, [])
+def save_ali_hist(d):       _save(ALIMENTATION_HIST_FILE, d)
 def load_profils():
     d = _load(PROFILS_FILE, {"admin_pin": "1234", "vendeurs": []})
     if not os.path.exists(PROFILS_FILE): _save(PROFILS_FILE, d)
@@ -1022,17 +1040,16 @@ if st.session_state.user_name is None:
     # VUE 1 — Choix de l'espace (deux grandes cartes)
     # ════════════════════════════════════════════════════════
     if st.session_state.login_space is None:
-        _, c1, gap, c2, _ = st.columns([1, 3, 0.3, 3, 1])
+        _, c1, g1, c2, g2, c3, _ = st.columns([0.5, 3, 0.2, 3, 0.2, 3, 0.5])
         with c1:
             st.markdown("""
             <div style="background:#FFFFFF;border:3px solid #1B2B4B;border-radius:20px;
-                        padding:2.5rem 1.5rem;text-align:center;cursor:pointer;
+                        padding:2.5rem 1.5rem;text-align:center;
                         box-shadow:0 4px 24px rgba(27,43,75,.12)">
               <div style="font-size:3rem;margin-bottom:.8rem">🧑‍💼</div>
               <div style="font-family:'Space Grotesk',sans-serif;font-size:1.2rem;
                           font-weight:700;color:#1B2B4B">Espace Vendeurs</div>
-              <div style="font-size:.75rem;color:#8A9AB5;margin-top:.4rem">
-                Saisir les ventes</div>
+              <div style="font-size:.75rem;color:#8A9AB5;margin-top:.4rem">Saisir les ventes</div>
             </div>
             """, unsafe_allow_html=True)
             if st.button("Entrer →", key="btn_space_vendeur", use_container_width=True):
@@ -1041,14 +1058,28 @@ if st.session_state.user_name is None:
 
         with c2:
             st.markdown("""
+            <div style="background:#FFFFFF;border:3px solid #059669;border-radius:20px;
+                        padding:2.5rem 1.5rem;text-align:center;
+                        box-shadow:0 4px 24px rgba(5,150,105,.12)">
+              <div style="font-size:3rem;margin-bottom:.8rem">📦</div>
+              <div style="font-family:'Space Grotesk',sans-serif;font-size:1.2rem;
+                          font-weight:700;color:#1B2B4B">Alimentation Stock</div>
+              <div style="font-size:.75rem;color:#8A9AB5;margin-top:.4rem">Ajouter des articles</div>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("Entrer →", key="btn_space_ali", use_container_width=True):
+                st.session_state.login_space = "alimentation"
+                st.rerun()
+
+        with c3:
+            st.markdown("""
             <div style="background:#FFFFFF;border:3px solid #C09020;border-radius:20px;
-                        padding:2.5rem 1.5rem;text-align:center;cursor:pointer;
+                        padding:2.5rem 1.5rem;text-align:center;
                         box-shadow:0 4px 24px rgba(192,144,32,.15)">
               <div style="font-size:3rem;margin-bottom:.8rem">👑</div>
               <div style="font-family:'Space Grotesk',sans-serif;font-size:1.2rem;
                           font-weight:700;color:#1B2B4B">Espace Admin</div>
-              <div style="font-size:.75rem;color:#8A9AB5;margin-top:.4rem">
-                Gestion &amp; stock</div>
+              <div style="font-size:.75rem;color:#8A9AB5;margin-top:.4rem">Gestion &amp; stock</div>
             </div>
             """, unsafe_allow_html=True)
             if st.button("Entrer →", key="btn_space_admin", use_container_width=True):
@@ -1123,6 +1154,222 @@ if st.session_state.user_name is None:
             st.session_state.login_space = None
             st.rerun()
 
+    # ════════════════════════════════════════════════════════
+    # VUE 2C — Espace Alimentation : PIN livreur
+    # ════════════════════════════════════════════════════════
+    elif st.session_state.login_space == "alimentation":
+        profils_ali = load_profils()
+        ali_pin_stored = profils_ali.get("alimentation_pin", "")
+
+        st.markdown("""
+        <div style="text-align:center;margin-bottom:1.4rem">
+          <span style="background:#059669;color:#FFF;font-size:.72rem;font-weight:600;
+                       letter-spacing:.15em;text-transform:uppercase;
+                       padding:.4rem 1.2rem;border-radius:100px">📦 Alimentation Stock</span>
+        </div>
+        """, unsafe_allow_html=True)
+
+        if not ali_pin_stored:
+            st.warning("⚠️ Aucun code PIN alimentation configuré. Contactez l'administrateur.")
+        else:
+            _, ac, _ = st.columns([1, 2, 1])
+            with ac:
+                ali_nom = st.text_input("Votre nom (livreur)", placeholder="Ex: Ahmed",
+                                        key="ali_nom_input")
+                ali_pin_input = st.text_input("Code PIN alimentation", type="password",
+                                              placeholder="• • • •", key="ali_pin_input")
+                if st.button("📦 Accéder à l'alimentation", use_container_width=True,
+                             key="btn_ali_login"):
+                    if not ali_nom.strip():
+                        st.warning("Saisissez votre nom.")
+                    elif ali_pin_input == ali_pin_stored:
+                        st.session_state.user_name = ali_nom.strip()
+                        st.session_state.user_role = "livreur"
+                        st.session_state.ali_livreur = ali_nom.strip()
+                        st.session_state.ali_pin_error = False
+                        st.session_state.login_space = None
+                        st.rerun()
+                    else:
+                        st.session_state.ali_pin_error = True
+                        st.rerun()
+                if st.session_state.ali_pin_error:
+                    st.error("❌ Code PIN incorrect.")
+
+        st.markdown("<div style='height:.8rem'></div>", unsafe_allow_html=True)
+        if st.button("← Retour", key="back_ali"):
+            st.session_state.ali_pin_error = False
+            st.session_state.login_space = None
+            st.rerun()
+
+    st.stop()
+
+# ══════════════════════════════════════════════════════════════════════════════
+# FLUX ALIMENTATION LIVREUR
+# ══════════════════════════════════════════════════════════════════════════════
+if st.session_state.user_role == "livreur":
+    livreur_nom = st.session_state.user_name
+    now_str_ali = datetime.now().strftime("%A %d %b %Y  —  %H:%M")
+    lh1, lh2 = st.columns([5, 1])
+    with lh1:
+        st.markdown(f"""
+        <div class="app-header">
+          <div class="app-logo">📦</div>
+          <div><div class="app-title">ALIMENTATION STOCK</div>
+          <div class="app-sub">Latif Shop</div></div>
+          <div class="app-badge">🚚 {livreur_nom}</div>
+          <div style="margin-left:1rem;color:rgba(255,255,255,.6);font-size:.72rem">{now_str_ali}</div>
+        </div>""", unsafe_allow_html=True)
+    with lh2:
+        st.markdown("<div style='height:1rem'></div>", unsafe_allow_html=True)
+        if st.button("⏻ Déconnexion", use_container_width=True, key="ali_logout"):
+            for k in ["user_name","user_role","ali_step","ali_cat","ali_art_key","ali_qtys","ali_livreur"]:
+                st.session_state[k] = None if k in ["user_name","user_role","ali_cat","ali_art_key"] else (0 if k=="ali_step" else ({} if k=="ali_qtys" else ""))
+            st.rerun()
+
+    stock_ali  = load_stock()
+    history_ali = load_history()
+    cats_ali   = load_categories()
+    cur_ali    = st.session_state.ali_step
+
+    # ── ÉTAPE 0 : Choisir la catégorie ──────────────────────────────────────
+    if cur_ali == 0:
+        st.markdown('<span class="section-label">Choisissez une catégorie</span>', unsafe_allow_html=True)
+        if not cats_ali:
+            st.info("Aucune catégorie disponible.")
+        else:
+            clicked_ali_cat = None
+            nb_c = min(len(cats_ali), 4)
+            rows_ali = [cats_ali[i:i+nb_c] for i in range(0, len(cats_ali), nb_c)]
+            for row in rows_ali:
+                rcols = st.columns(nb_c)
+                for ci, cat in enumerate(row):
+                    cat_n = cat.get("name","") if isinstance(cat,dict) else cat
+                    cat_i = cat.get("icon","📦") if isinstance(cat,dict) else "📦"
+                    cat_c = cat.get("color","#1B2B4B") if isinstance(cat,dict) else "#1B2B4B"
+                    nb_art_ali = sum(1 for e in history_ali if e.get("categorie","") == cat_n)
+                    with rcols[ci]:
+                        st.markdown(
+                            f'<div style="background:#FFF;border:2px solid {cat_c}44;'
+                            f'border-radius:14px;padding:1.2rem;text-align:center;margin-bottom:.4rem">'
+                            f'<div style="font-size:2.2rem">{cat_i}</div>'
+                            f'<div style="font-weight:700;color:#1B2B4B;font-size:.9rem;margin:.4rem 0">{cat_n}</div>'
+                            f'<div style="font-size:.7rem;color:#8A9AB5">{nb_art_ali} article(s)</div></div>',
+                            unsafe_allow_html=True)
+                        if st.button("Sélectionner", key=f"ali_cat_{ci}", use_container_width=True):
+                            clicked_ali_cat = cat_n
+            if clicked_ali_cat:
+                st.session_state.ali_cat = clicked_ali_cat
+                st.session_state.ali_step = 1
+                st.rerun()
+
+    # ── ÉTAPE 1 : Choisir l'article ─────────────────────────────────────────
+    elif cur_ali == 1:
+        st.markdown(f'<div style="font-size:.78rem;color:#8A9AB5;margin-bottom:.8rem">📂 {st.session_state.ali_cat}</div>', unsafe_allow_html=True)
+        st.markdown('<span class="section-label">Choisissez un article</span>', unsafe_allow_html=True)
+        arts_ali = []
+        seen_ali = set()
+        for e in history_ali:
+            mk = model_key(e["model_name"])
+            if mk in seen_ali or mk not in stock_ali: continue
+            if e.get("categorie","") != st.session_state.ali_cat: continue
+            seen_ali.add(mk); arts_ali.append((mk, e))
+        if not arts_ali:
+            st.info("Aucun article dans cette catégorie.")
+        else:
+            clicked_ali_art = None
+            for row in [arts_ali[i:i+3] for i in range(0, len(arts_ali), 3)]:
+                r0, r1, r2 = st.columns(3)
+                for ci2, col_ref in enumerate([r0, r1, r2]):
+                    if ci2 >= len(row): break
+                    mk_a, entry_a = row[ci2]
+                    b64_a = entry_a.get("b64_thumb") or stock_ali.get(mk_a,{}).get("b64_thumb","")
+                    photo_h = (f'<img src="data:image/png;base64,{b64_a}" style="width:100%;height:100px;object-fit:cover;border-radius:8px;margin-bottom:.4rem">'
+                               if b64_a else '<div style="height:100px;background:#EEF1F7;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:2rem;margin-bottom:.4rem">👕</div>')
+                    with col_ref:
+                        st.markdown(
+                            f'<div style="background:#FFF;border:2px solid #E0E5EF;border-radius:12px;padding:.7rem">'
+                            f'{photo_h}<div style="font-weight:700;color:#1B2B4B;font-size:.82rem">{entry_a["model_name"]}</div></div>',
+                            unsafe_allow_html=True)
+                        if st.button("Sélectionner", key=f"ali_art_{mk_a}", use_container_width=True):
+                            clicked_ali_art = mk_a
+            if clicked_ali_art:
+                st.session_state.ali_art_key = clicked_ali_art
+                st.session_state.ali_qtys = {}
+                st.session_state.ali_step = 2
+                st.rerun()
+        if st.button("← Retour catégories", key="ali_back_cat"):
+            st.session_state.ali_step = 0; st.rerun()
+
+    # ── ÉTAPE 2 : Tailles +/− ───────────────────────────────────────────────
+    elif cur_ali == 2:
+        mk_ali   = st.session_state.ali_art_key
+        sd_ali   = stock_ali.get(mk_ali, {})
+        art_name_ali = sd_ali.get("model_name", mk_ali)
+        colors_ali = sd_ali.get("colors", [])
+        sizes_ali  = sd_ali.get("sizes", [])
+        b64_ali    = sd_ali.get("b64_thumb","")
+
+        st.markdown(f'<div style="font-size:.78rem;color:#8A9AB5;margin-bottom:.8rem">📂 {st.session_state.ali_cat} › <strong style="color:#1B2B4B">{art_name_ali}</strong></div>', unsafe_allow_html=True)
+
+        ah1, ah2 = st.columns([1, 3])
+        with ah1:
+            if b64_ali:
+                st.markdown(f'<img src="data:image/png;base64,{b64_ali}" style="width:100%;border-radius:12px">', unsafe_allow_html=True)
+            else:
+                st.markdown('<div style="font-size:4rem;text-align:center">👕</div>', unsafe_allow_html=True)
+        with ah2:
+            st.markdown(f'<div style="font-size:1.1rem;font-weight:700;color:#1B2B4B;margin-bottom:.8rem">{art_name_ali}</div>', unsafe_allow_html=True)
+            st.markdown('<span class="section-label">Quantités à ajouter par taille</span>', unsafe_allow_html=True)
+
+            if "ali_qtys" not in st.session_state or not isinstance(st.session_state.ali_qtys, dict):
+                st.session_state.ali_qtys = {}
+
+            for color in colors_ali:
+                hx_ali = HEX_MAP.get(color, "#888")
+                st.markdown(
+                    f'<div style="display:flex;align-items:center;gap:.5rem;margin:.6rem 0 .3rem">'
+                    f'<span style="width:14px;height:14px;border-radius:50%;background:{hx_ali};'
+                    f'border:1px solid rgba(0,0,0,.15);display:inline-block"></span>'
+                    f'<strong style="font-size:.85rem;color:#1B2B4B">{color}</strong></div>',
+                    unsafe_allow_html=True)
+                sz_cols = st.columns(min(len(sizes_ali), 5))
+                for si, sz in enumerate(sizes_ali):
+                    key_q = f"{color}__{sz}"
+                    cur_stock = sd_ali.get("stock",{}).get(color,{}).get(sz, 0)
+                    with sz_cols[si % 5]:
+                        st.markdown(f'<div style="text-align:center;font-size:.7rem;color:#8A9AB5;margin-bottom:.2rem">{sz}<br><span style="color:#059669">{cur_stock} en stock</span></div>', unsafe_allow_html=True)
+                        val_q = st.number_input("", min_value=0, max_value=500, value=st.session_state.ali_qtys.get(key_q, 0), step=1, key=f"ali_q_{mk_ali}_{color}_{sz}", label_visibility="collapsed")
+                        st.session_state.ali_qtys[key_q] = int(val_q)
+
+        total_added = sum(v for v in st.session_state.ali_qtys.values() if v > 0)
+        st.markdown(f'<div style="background:#F0FDF4;border:1px solid #059669;border-radius:10px;padding:.8rem 1rem;margin:1rem 0;font-size:.85rem;color:#065F46"><strong>Total à ajouter : {total_added} pièce(s)</strong></div>', unsafe_allow_html=True)
+
+        ok1, ok2 = st.columns(2)
+        with ok1:
+            if st.button("← Retour articles", key="ali_back_art", use_container_width=True):
+                st.session_state.ali_step = 1; st.rerun()
+        with ok2:
+            if st.button("✅ Envoyer la demande", key="ali_send", use_container_width=True):
+                if total_added == 0:
+                    st.warning("Ajoutez au moins une pièce.")
+                else:
+                    pending = load_ali_pending()
+                    pending.append({
+                        "date":      datetime.now().strftime("%d/%m/%Y %H:%M"),
+                        "livreur":   livreur_nom,
+                        "model_key": mk_ali,
+                        "model_name": art_name_ali,
+                        "categorie": st.session_state.ali_cat,
+                        "qtys":      {k: v for k, v in st.session_state.ali_qtys.items() if v > 0},
+                        "statut":    "en_attente",
+                    })
+                    save_ali_pending(pending)
+                    st.success("✅ Demande envoyée ! En attente d'approbation de l'administrateur.")
+                    st.session_state.ali_step = 0
+                    st.session_state.ali_qtys = {}
+                    st.session_state.ali_art_key = None
+                    st.rerun()
+
     st.stop()
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -1160,11 +1407,148 @@ with header_right:
 is_admin = st.session_state.user_role == "admin"
 
 if is_admin:
-    tab_new, tab_hist, tab_stock, tab_ventes, tab_admin = st.tabs([
-        "✦  Nouvelle Grille", "📋  Historique", "📦  Stock & Commandes", "💰  Ventes", "⚙  Profils & Config"])
+    tab_dashboard, tab_new, tab_hist, tab_stock, tab_ventes, tab_ali_admin, tab_admin = st.tabs([
+        "📊  Dashboard", "✦  Nouvelle Grille", "📋  Historique",
+        "📦  Stock & Commandes", "💰  Ventes", "📥  Alimentation", "⚙  Profils & Config"])
 else:
     tab_ventes = st.tabs(["💰  Saisie des Ventes"])[0]
-    tab_new = tab_hist = tab_stock = tab_admin = None
+    tab_dashboard = tab_new = tab_hist = tab_stock = tab_ali_admin = tab_admin = None
+
+# ══════════════════════════════════════════════════════════════════════════════
+# ONGLET DASHBOARD (admin seulement)
+# ══════════════════════════════════════════════════════════════════════════════
+if tab_dashboard:
+    with tab_dashboard:
+        ventes_all  = load_ventes()
+        stock_dash  = load_stock()
+        today_str   = datetime.now().strftime("%d/%m/%Y")
+        week_start  = (datetime.now() - timedelta(days=datetime.now().weekday())).strftime("%d/%m/%Y")
+
+        ventes_today = [v for v in ventes_all if v.get("date","").startswith(today_str)]
+        ventes_week  = [v for v in ventes_all
+                        if v.get("date","") >= week_start.replace("/","") or
+                        v.get("date","")[:10].replace("/","") >= week_start.replace("/","")]
+
+        # Recalcul correct semaine
+        def in_this_week(date_str):
+            try:
+                d = datetime.strptime(date_str[:10], "%d/%m/%Y")
+                return (datetime.now() - d).days <= 7
+            except: return False
+        ventes_week = [v for v in ventes_all if in_this_week(v.get("date",""))]
+
+        pieces_today = sum(v.get("quantite",1) for v in ventes_today)
+        pieces_week  = sum(v.get("quantite",1) for v in ventes_week)
+        nb_ali_pending = len(load_ali_pending())
+
+        # ── Métriques ────────────────────────────────────────────────────────
+        m1, m2, m3, m4 = st.columns(4)
+        with m1:
+            st.metric("💰 Ventes aujourd'hui", f"{len(ventes_today)} vente(s)", f"{pieces_today} pièce(s)")
+        with m2:
+            st.metric("📅 Ventes cette semaine", f"{len(ventes_week)} vente(s)", f"{pieces_week} pièce(s)")
+        with m3:
+            # Articles en rupture
+            ruptures = [(k, d) for k, d in stock_dash.items()
+                        if sum(q for c in d.get("stock",{}).values() for q in c.values()) == 0]
+            st.metric("🔴 Ruptures stock", f"{len(ruptures)} article(s)")
+        with m4:
+            st.metric("📥 Alimentations en attente", f"{nb_ali_pending}", delta=None)
+
+        st.markdown("<hr>", unsafe_allow_html=True)
+
+        # ── Top 3 articles ───────────────────────────────────────────────────
+        st.markdown("### 🏆 Top 3 articles les plus vendus")
+        from collections import Counter
+        top_arts = Counter()
+        for v in ventes_all:
+            top_arts[v.get("model_name","?")] += v.get("quantite", 1)
+        top3 = top_arts.most_common(3)
+        if top3:
+            t1, t2, t3 = st.columns(3)
+            medailles = ["🥇", "🥈", "🥉"]
+            for idx, (col_t, (nom_t, qty_t)) in enumerate(zip([t1,t2,t3], top3)):
+                with col_t:
+                    mk_t = model_key(nom_t)
+                    b64_t = stock_dash.get(mk_t,{}).get("b64_thumb","")
+                    photo_t = (f'<img src="data:image/png;base64,{b64_t}" style="width:100%;height:120px;object-fit:cover;border-radius:10px;margin-bottom:.5rem">'
+                               if b64_t else '<div style="height:120px;background:#EEF1F7;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:2.5rem;margin-bottom:.5rem">👕</div>')
+                    st.markdown(
+                        f'<div style="background:#FFF;border:2px solid #E0E5EF;border-radius:14px;padding:1rem;text-align:center">'
+                        f'{photo_t}'
+                        f'<div style="font-size:1.4rem">{medailles[idx]}</div>'
+                        f'<div style="font-weight:700;color:#1B2B4B;font-size:.9rem;margin:.3rem 0">{nom_t}</div>'
+                        f'<div style="color:#059669;font-weight:700">{qty_t} pièce(s) vendues</div></div>',
+                        unsafe_allow_html=True)
+        else:
+            st.info("Aucune vente enregistrée.")
+
+        st.markdown("<hr>", unsafe_allow_html=True)
+
+        # ── Alertes stock faible ─────────────────────────────────────────────
+        st.markdown("### 🔔 Alertes stock")
+        alertes = []
+        for mk, d in stock_dash.items():
+            nom_a = d.get("model_name", mk)
+            seuil_a = d.get("seuil_min", 2)
+            total_a = sum(q for c in d.get("stock",{}).values() for q in c.values())
+            if total_a == 0:
+                alertes.append(("🔴 RUPTURE", nom_a, total_a, seuil_a))
+            elif total_a <= seuil_a:
+                alertes.append(("🟡 FAIBLE", nom_a, total_a, seuil_a))
+
+        if not alertes:
+            st.success("✅ Tous les articles ont un stock suffisant.")
+        else:
+            for badge_a, nom_a, total_a, seuil_a in alertes:
+                couleur_a = "#DC2626" if "RUPTURE" in badge_a else "#D97706"
+                st.markdown(
+                    f'<div style="background:#FFF;border-left:4px solid {couleur_a};'
+                    f'border:1px solid {couleur_a}33;border-radius:10px;padding:.8rem 1rem;'
+                    f'margin-bottom:.5rem;display:flex;align-items:center;justify-content:space-between">'
+                    f'<div><span style="background:{couleur_a};color:#FFF;font-size:.62rem;'
+                    f'font-weight:700;padding:2px 8px;border-radius:100px;margin-right:.6rem">{badge_a}</span>'
+                    f'<strong style="color:#1B2B4B">{nom_a}</strong></div>'
+                    f'<div style="font-size:.82rem;color:#4A5568">{total_a} pcs (seuil: {seuil_a})</div></div>',
+                    unsafe_allow_html=True)
+
+        st.markdown("<hr>", unsafe_allow_html=True)
+
+        # ── Rapport WhatsApp ─────────────────────────────────────────────────
+        st.markdown("### 📱 Rapport de fin de journée — WhatsApp")
+        WA_NUMBER = "212661376059"
+        lignes_rapport = [f"📊 *Rapport Latif Shop — {today_str}*", ""]
+        lignes_rapport.append(f"💰 Ventes du jour : {len(ventes_today)} transaction(s) — {pieces_today} pièce(s)")
+        lignes_rapport.append(f"📅 Ventes de la semaine : {len(ventes_week)} — {pieces_week} pièce(s)")
+        lignes_rapport.append("")
+        if top3:
+            lignes_rapport.append("🏆 Top articles :")
+            for i,(n,q) in enumerate(top3):
+                lignes_rapport.append(f"  {['🥇','🥈','🥉'][i]} {n} : {q} pcs")
+            lignes_rapport.append("")
+        if ventes_today:
+            lignes_rapport.append("📋 Détail ventes :")
+            agg_v = {}
+            for v in ventes_today:
+                agg_v[v.get("vendeur","?")] = agg_v.get(v.get("vendeur","?"),0) + v.get("quantite",1)
+            for vendeur_r, qty_r in sorted(agg_v.items(), key=lambda x:-x[1]):
+                lignes_rapport.append(f"  • {vendeur_r} : {qty_r} pcs")
+            lignes_rapport.append("")
+        if alertes:
+            lignes_rapport.append(f"⚠️ {len(alertes)} alerte(s) stock à vérifier")
+        lignes_rapport.append("")
+        lignes_rapport.append("_Latif Shop — Gestion automatique_")
+
+        message_wa = "\n".join(lignes_rapport)
+        wa_url = f"https://wa.me/{WA_NUMBER}?text={urllib.parse.quote(message_wa)}"
+        st.markdown(
+            f'<a href="{wa_url}" target="_blank">'
+            f'<button style="background:#25D366;color:#FFF;border:none;border-radius:10px;'
+            f'padding:.8rem 2rem;font-size:.9rem;font-weight:700;cursor:pointer;width:100%">'
+            f'📱 Envoyer le rapport sur WhatsApp</button></a>',
+            unsafe_allow_html=True)
+        with st.expander("👁 Aperçu du message"):
+            st.text(message_wa)
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ONGLET 1 : NOUVELLE GRILLE (admin seulement)
@@ -2662,6 +3046,12 @@ with tab_ventes:
                 seen_mk.add(mk_e)
                 arts_cat.append((mk_e, e))
 
+            # Tri par popularité (articles les plus vendus en premier)
+            ventes_count_v = {}
+            for vv in load_ventes():
+                ventes_count_v[vv.get("model_key","")] = ventes_count_v.get(vv.get("model_key",""), 0) + vv.get("quantite",1)
+            arts_cat.sort(key=lambda x: ventes_count_v.get(x[0], 0), reverse=True)
+
             clicked_art = None   # ← collecte du clic HORS colonnes
 
             if not arts_cat:
@@ -3247,6 +3637,127 @@ with tab_ventes:
         with ev2: st.download_button("📄 CSV",pd.DataFrame([{"Date":v.get("date"),"Vendeur":v.get("vendeur",""),"Modèle":v.get("model_name"),"Couleur":v.get("couleur"),"Taille":v.get("taille"),"Qté":v.get("quantite",1),"Note":v.get("note","")} for v in fv]).to_csv(index=False).encode("utf-8-sig"),f"ventes_{datetime.now().strftime('%Y%m%d')}.csv","text/csv",use_container_width=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
+# ONGLET ALIMENTATION ADMIN
+# ══════════════════════════════════════════════════════════════════════════════
+if tab_ali_admin:
+    with tab_ali_admin:
+        pending_list = load_ali_pending()
+        hist_list    = load_ali_hist()
+        stock_ap     = load_stock()
+
+        sub_pending, sub_hist = st.tabs(["📋 Demandes en attente", "📜 Historique"])
+
+        # ── Sous-onglet 1 : Demandes en attente ─────────────────────────────
+        with sub_pending:
+            nb_p = len(pending_list)
+            if nb_p == 0:
+                st.info("✅ Aucune demande d'alimentation en attente.")
+            else:
+                st.markdown(f'<span class="section-label">{nb_p} demande(s) en attente</span>', unsafe_allow_html=True)
+                for pi, req in enumerate(pending_list):
+                    with st.expander(f"📦 {req.get('model_name','?')} — {req.get('livreur','?')} — {req.get('date','?')}", expanded=(pi==0)):
+                        # Affichage recap
+                        rc1, rc2 = st.columns([2,1])
+                        with rc1:
+                            st.markdown(f"**Article :** {req.get('model_name','?')}")
+                            st.markdown(f"**Catégorie :** {req.get('categorie','?')}")
+                            st.markdown(f"**Livreur :** {req.get('livreur','?')}")
+                            st.markdown(f"**Date :** {req.get('date','?')}")
+                            st.markdown("**Quantités proposées :**")
+                            for k, v in req.get("qtys",{}).items():
+                                color_q, size_q = k.split("__") if "__" in k else (k, "")
+                                hx_q = HEX_MAP.get(color_q,"#888")
+                                st.markdown(
+                                    f'<div style="display:inline-flex;align-items:center;gap:.4rem;'
+                                    f'background:#F4F6FA;border-radius:8px;padding:.3rem .7rem;margin:.2rem">'
+                                    f'<span style="width:10px;height:10px;border-radius:50%;background:{hx_q};display:inline-block"></span>'
+                                    f'<span>{color_q}</span><strong>{size_q}</strong><span style="color:#059669;font-weight:700">+{v}</span></div>',
+                                    unsafe_allow_html=True)
+
+                        with rc2:
+                            mk_req = req.get("model_key","")
+                            b64_req = stock_ap.get(mk_req,{}).get("b64_thumb","")
+                            if b64_req:
+                                st.markdown(f'<img src="data:image/png;base64,{b64_req}" style="width:100%;border-radius:10px">', unsafe_allow_html=True)
+
+                        # Modifier les quantités avant approbation
+                        if st.session_state.ali_edit_idx == pi:
+                            st.markdown("**✏️ Modifier les quantités :**")
+                            new_qtys = {}
+                            for k, v in req.get("qtys",{}).items():
+                                color_q, size_q = k.split("__") if "__" in k else (k, "")
+                                new_v = st.number_input(f"{color_q} / {size_q}", min_value=0, max_value=500,
+                                                        value=v, key=f"edit_ali_{pi}_{k}")
+                                new_qtys[k] = new_v
+                            sav1, sav2 = st.columns(2)
+                            with sav1:
+                                if st.button("💾 Sauvegarder modifications", key=f"save_ali_edit_{pi}", use_container_width=True):
+                                    pending_list[pi]["qtys"] = {k:v for k,v in new_qtys.items() if v>0}
+                                    save_ali_pending(pending_list)
+                                    st.session_state.ali_edit_idx = None
+                                    st.rerun()
+                            with sav2:
+                                if st.button("✕ Annuler", key=f"cancel_ali_edit_{pi}", use_container_width=True):
+                                    st.session_state.ali_edit_idx = None
+                                    st.rerun()
+                        else:
+                            b1, b2, b3 = st.columns(3)
+                            with b1:
+                                if st.button("✏️ Modifier", key=f"ali_edit_{pi}", use_container_width=True):
+                                    st.session_state.ali_edit_idx = pi
+                                    st.rerun()
+                            with b2:
+                                if st.button("✅ Approuver", key=f"ali_approve_{pi}", use_container_width=True):
+                                    # Mettre à jour le stock
+                                    mk_ap = req.get("model_key","")
+                                    for k, qty_ap in req.get("qtys",{}).items():
+                                        color_ap, size_ap = k.split("__") if "__" in k else (k,"")
+                                        stock_ap.setdefault(mk_ap,{}).setdefault("stock",{}).setdefault(color_ap,{})
+                                        stock_ap[mk_ap]["stock"][color_ap][size_ap] = \
+                                            stock_ap[mk_ap]["stock"][color_ap].get(size_ap,0) + qty_ap
+                                    save_stock(stock_ap)
+                                    # Historique
+                                    req["statut"] = "approuve"
+                                    req["date_approbation"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+                                    hist_list.insert(0, req)
+                                    save_ali_hist(hist_list)
+                                    pending_list.pop(pi)
+                                    save_ali_pending(pending_list)
+                                    st.success(f"✅ Stock mis à jour pour {req.get('model_name','?')} !")
+                                    st.rerun()
+                            with b3:
+                                if st.button("❌ Rejeter", key=f"ali_reject_{pi}", use_container_width=True):
+                                    req["statut"] = "rejete"
+                                    req["date_approbation"] = datetime.now().strftime("%d/%m/%Y %H:%M")
+                                    hist_list.insert(0, req)
+                                    save_ali_hist(hist_list)
+                                    pending_list.pop(pi)
+                                    save_ali_pending(pending_list)
+                                    st.warning("❌ Demande rejetée.")
+                                    st.rerun()
+
+        # ── Sous-onglet 2 : Historique ───────────────────────────────────────
+        with sub_hist:
+            if not hist_list:
+                st.info("Aucune alimentation dans l'historique.")
+            else:
+                st.markdown(f'<span class="section-label">{len(hist_list)} alimentation(s) passée(s)</span>', unsafe_allow_html=True)
+                for hi, h in enumerate(hist_list):
+                    statut_h = h.get("statut","?")
+                    color_h  = "#059669" if statut_h=="approuve" else "#DC2626"
+                    badge_h  = "✅ Approuvé" if statut_h=="approuve" else "❌ Rejeté"
+                    total_h  = sum(h.get("qtys",{}).values())
+                    st.markdown(
+                        f'<div style="background:#FFF;border:1px solid #E0E5EF;border-radius:12px;'
+                        f'padding:1rem 1.2rem;margin-bottom:.6rem;display:flex;justify-content:space-between;align-items:center">'
+                        f'<div><strong style="color:#1B2B4B">{h.get("model_name","?")}</strong> '
+                        f'<span style="font-size:.75rem;color:#8A9AB5">par {h.get("livreur","?")} — {h.get("date","?")}</span><br>'
+                        f'<span style="font-size:.78rem;color:#4A5568">+{total_h} pièce(s) · {h.get("categorie","?")}</span></div>'
+                        f'<span style="background:{color_h}22;color:{color_h};border:1px solid {color_h}44;'
+                        f'font-size:.65rem;font-weight:700;padding:3px 10px;border-radius:100px">{badge_h}</span></div>',
+                        unsafe_allow_html=True)
+
+# ══════════════════════════════════════════════════════════════════════════════
 # ONGLET 5 : GESTION DES PROFILS (admin seulement)
 # ══════════════════════════════════════════════════════════════════════════════
 if tab_admin:
@@ -3326,10 +3837,43 @@ if tab_admin:
                         f'font-weight:600">{nb_art} article(s)</span></div>',
                         unsafe_allow_html=True)
                 with cc3:
-                    if st.button("🗑  Supprimer", key=f"del_cat_{ci}",
-                                 use_container_width=True):
-                        cats_admin.pop(ci)
+                    ec1, ec2 = st.columns(2)
+                    with ec1:
+                        if st.button("✏️", key=f"edit_cat_{ci}", use_container_width=True,
+                                     help="Modifier cette catégorie"):
+                            st.session_state.edit_cat_idx = ci
+                            st.rerun()
+                    with ec2:
+                        if st.button("🗑", key=f"del_cat_{ci}", use_container_width=True,
+                                     help="Supprimer"):
+                            cats_admin.pop(ci)
+                            save_categories(cats_admin)
+                            st.rerun()
+
+                # Formulaire d'édition inline
+                if st.session_state.edit_cat_idx == ci:
+                    with st.form(key=f"form_edit_cat_{ci}"):
+                        st.markdown(f"**✏️ Modifier : {cat_n}**")
+                        ef1, ef2, ef3 = st.columns([3,1,1])
+                        with ef1: new_cn = st.text_input("Nom", value=cat_n, key=f"ecn_{ci}")
+                        with ef2: new_ci = st.text_input("Icône", value=cat_i, max_chars=4, key=f"eci_{ci}")
+                        with ef3:
+                            CAT_COLORS2 = ["#D4A843","#4F8EF7","#2DD4A0","#F76B6B","#C084FC","#FB923C","#34D399"]
+                            new_cc = st.selectbox("Couleur", CAT_COLORS2,
+                                index=CAT_COLORS2.index(cat_c) if cat_c in CAT_COLORS2 else 0,
+                                format_func=lambda x: {"#D4A843":"🟡","#4F8EF7":"🔵","#2DD4A0":"🟢",
+                                    "#F76B6B":"🔴","#C084FC":"🟣","#FB923C":"🟠","#34D399":"💚"}.get(x,x),
+                                key=f"ecc_{ci}")
+                        sb1, sb2 = st.columns(2)
+                        with sb1: save_ok = st.form_submit_button("💾 Sauvegarder", use_container_width=True)
+                        with sb2: cancel_ok = st.form_submit_button("✕ Annuler", use_container_width=True)
+                    if save_ok:
+                        cats_admin[ci] = {"name": new_cn.strip() or cat_n, "icon": new_ci or cat_i, "color": new_cc}
                         save_categories(cats_admin)
+                        st.session_state.edit_cat_idx = None
+                        st.rerun()
+                    if cancel_ok:
+                        st.session_state.edit_cat_idx = None
                         st.rerun()
 
         st.markdown("<hr>", unsafe_allow_html=True)
@@ -3364,10 +3908,30 @@ if tab_admin:
                     st.markdown(f'<div style="display:flex;align-items:center;gap:10px;padding:8px 0">'
                                 f'<div class="profil-avatar" style="width:36px;height:36px;font-size:.85rem;min-width:36px">{ini}</div>'
                                 f'<div><strong>{nom}</strong><br><span style="font-size:.68rem;color:#888">{nb_v} vente(s) enregistrée(s)</span></div></div>',unsafe_allow_html=True)
+                with vc2:
+                    if st.button("✏️", key=f"edit_v_{i}", help="Modifier le nom"):
+                        st.session_state.edit_vend_idx = i
+                        st.rerun()
                 with vc3:
-                    if st.button("Supprimer",key=f"del_v_{i}"):
+                    if st.button("🗑", key=f"del_v_{i}", help="Supprimer"):
                         vendeurs.remove(nom); profils_data["vendeurs"]=vendeurs
                         save_profils(profils_data); st.rerun()
+
+                if st.session_state.edit_vend_idx == i:
+                    with st.form(key=f"form_edit_v_{i}"):
+                        new_vnom = st.text_input("Nouveau nom", value=nom, key=f"evn_{i}")
+                        vs1, vs2 = st.columns(2)
+                        with vs1: vsave = st.form_submit_button("💾 Sauvegarder", use_container_width=True)
+                        with vs2: vcancel = st.form_submit_button("✕ Annuler", use_container_width=True)
+                    if vsave and new_vnom.strip():
+                        vendeurs[i] = new_vnom.strip()
+                        profils_data["vendeurs"] = vendeurs
+                        save_profils(profils_data)
+                        st.session_state.edit_vend_idx = None
+                        st.rerun()
+                    if vcancel:
+                        st.session_state.edit_vend_idx = None
+                        st.rerun()
 
         st.markdown("<hr>",unsafe_allow_html=True)
 
@@ -3384,6 +3948,37 @@ if tab_admin:
             else:
                 profils_data["admin_pin"]=new_pin; save_profils(profils_data)
                 st.success("✓ PIN modifié avec succès !")
+
+        st.markdown("<hr>",unsafe_allow_html=True)
+
+        # ── PIN Alimentation ──────────────────────────────────────────────────
+        st.markdown("### 📦 Code PIN Alimentation")
+        st.caption("Ce code est donné aux livreurs pour accéder à l'espace Alimentation Stock.")
+        current_ali_pin = profils_data.get("alimentation_pin","")
+        ap1, ap2, ap3 = st.columns(3)
+        with ap1: new_ali_pin = st.text_input("Nouveau PIN alimentation", type="password", placeholder="• • • •", key="new_ali_pin")
+        with ap2: new_ali_pin2 = st.text_input("Confirmer", type="password", placeholder="• • • •", key="new_ali_pin2")
+        with ap3:
+            st.markdown("<div style='height:28px'></div>", unsafe_allow_html=True)
+            if st.button("💾 Définir le PIN", key="set_ali_pin", use_container_width=True):
+                if len(new_ali_pin) < 4: st.error("Le PIN doit faire au moins 4 caractères.")
+                elif new_ali_pin != new_ali_pin2: st.error("Les deux PINs ne correspondent pas.")
+                else:
+                    profils_data["alimentation_pin"] = new_ali_pin
+                    save_profils(profils_data)
+                    st.success("✓ PIN alimentation défini !")
+                    st.rerun()
+
+        if current_ali_pin:
+            st.markdown(f'<div style="background:#F0FDF4;border:1px solid #059669;border-radius:10px;padding:.8rem 1rem;margin:.8rem 0;font-size:.85rem;color:#065F46">PIN alimentation actuel : <strong>{"•"*len(current_ali_pin)}</strong> ({len(current_ali_pin)} caractères)</div>', unsafe_allow_html=True)
+            wa_pin_msg = f"Bonjour,\n\nVoici votre code d'accès pour l'alimentation du stock Latif Shop :\n\n🔐 Code PIN : *{current_ali_pin}*\n\n📱 Accédez via : https://latifshop-teeshirt.streamlit.app\n\nChoisissez \"📦 Alimentation Stock\" sur la page d'accueil."
+            wa_pin_url = f"https://wa.me/?text={urllib.parse.quote(wa_pin_msg)}"
+            st.markdown(
+                f'<a href="{wa_pin_url}" target="_blank">'
+                f'<button style="background:#25D366;color:#FFF;border:none;border-radius:10px;'
+                f'padding:.65rem 1.5rem;font-size:.85rem;font-weight:700;cursor:pointer">'
+                f'📱 Partager le PIN par WhatsApp</button></a>',
+                unsafe_allow_html=True)
 
         st.markdown("<hr>",unsafe_allow_html=True)
 
