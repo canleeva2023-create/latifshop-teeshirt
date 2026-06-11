@@ -1446,24 +1446,35 @@ if tab_dashboard:
         pieces_week  = sum(v.get("quantite",1) for v in ventes_week)
         nb_ali_pending = len(load_ali_pending())
 
-        # ── Métriques ────────────────────────────────────────────────────────
-        m1, m2, m3, m4 = st.columns(4)
-        with m1:
-            st.metric("💰 Ventes aujourd'hui", f"{len(ventes_today)} vente(s)", f"{pieces_today} pièce(s)")
-        with m2:
-            st.metric("📅 Ventes cette semaine", f"{len(ventes_week)} vente(s)", f"{pieces_week} pièce(s)")
-        with m3:
-            # Articles en rupture
-            ruptures = [(k, d) for k, d in stock_dash.items()
-                        if sum(q for c in d.get("stock",{}).values() for q in c.values()) == 0]
-            st.metric("🔴 Ruptures stock", f"{len(ruptures)} article(s)")
-        with m4:
-            st.metric("📥 Alimentations en attente", f"{nb_ali_pending}", delta=None)
+        # Articles en rupture (calculé avant les métriques)
+        ruptures = [(k, d) for k, d in stock_dash.items()
+                    if sum(q for c in d.get("stock",{}).values() for q in c.values()) == 0]
 
-        st.markdown("<hr>", unsafe_allow_html=True)
+        # ── Métriques grandes cartes ──────────────────────────────────────────
+        m1, m2, m3, m4 = st.columns(4)
+        for col_m, icon_m, label_m, val_m, sub_m, color_m in [
+            (m1, "💰", "Ventes aujourd'hui",   str(len(ventes_today)),  f"{pieces_today} pièces",    "#2563EB"),
+            (m2, "📅", "Ventes cette semaine",  str(len(ventes_week)),   f"{pieces_week} pièces",     "#7C3AED"),
+            (m3, "🔴", "Ruptures stock",        str(len(ruptures)),      "articles épuisés",          "#DC2626"),
+            (m4, "📥", "Attente approbation",   str(nb_ali_pending),     "alimentations",             "#D97706"),
+        ]:
+            with col_m:
+                st.markdown(
+                    f'<div style="background:#FFF;border:2px solid {color_m}33;border-radius:16px;'
+                    f'padding:1.4rem 1.2rem;text-align:center;box-shadow:0 2px 8px {color_m}18">'
+                    f'<div style="font-size:2.2rem;margin-bottom:.4rem">{icon_m}</div>'
+                    f'<div style="font-size:3rem;font-weight:800;color:{color_m};line-height:1">{val_m}</div>'
+                    f'<div style="font-size:1rem;font-weight:700;color:#1B2B4B;margin:.5rem 0 .2rem">{label_m}</div>'
+                    f'<div style="font-size:.85rem;color:#8A9AB5">{sub_m}</div>'
+                    f'</div>',
+                    unsafe_allow_html=True)
+
+        st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
 
         # ── Top 3 articles ───────────────────────────────────────────────────
-        st.markdown("### 🏆 Top 3 articles les plus vendus")
+        st.markdown(
+            '<div style="font-size:1.5rem;font-weight:800;color:#1B2B4B;margin-bottom:1rem">🏆 Top 3 articles les plus vendus</div>',
+            unsafe_allow_html=True)
         from collections import Counter
         top_arts = Counter()
         for v in ventes_all:
@@ -1472,26 +1483,34 @@ if tab_dashboard:
         if top3:
             t1, t2, t3 = st.columns(3)
             medailles = ["🥇", "🥈", "🥉"]
+            medal_colors = ["#D97706", "#6B7280", "#92400E"]
             for idx, (col_t, (nom_t, qty_t)) in enumerate(zip([t1,t2,t3], top3)):
                 with col_t:
                     mk_t = model_key(nom_t)
                     b64_t = stock_dash.get(mk_t,{}).get("b64_thumb","")
-                    photo_t = (f'<img src="data:image/png;base64,{b64_t}" style="width:100%;height:120px;object-fit:cover;border-radius:10px;margin-bottom:.5rem">'
-                               if b64_t else '<div style="height:120px;background:#EEF1F7;border-radius:10px;display:flex;align-items:center;justify-content:center;font-size:2.5rem;margin-bottom:.5rem">👕</div>')
+                    photo_t = (
+                        f'<img src="data:image/png;base64,{b64_t}" style="width:100%;height:140px;object-fit:cover;border-radius:12px;margin-bottom:.7rem">'
+                        if b64_t else
+                        f'<div style="height:140px;background:#EEF1F7;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:3.5rem;margin-bottom:.7rem">👕</div>'
+                    )
                     st.markdown(
-                        f'<div style="background:#FFF;border:2px solid #E0E5EF;border-radius:14px;padding:1rem;text-align:center">'
+                        f'<div style="background:#FFF;border:2px solid #E0E5EF;border-radius:16px;padding:1.2rem;text-align:center;box-shadow:0 2px 10px #0001">'
                         f'{photo_t}'
-                        f'<div style="font-size:1.4rem">{medailles[idx]}</div>'
-                        f'<div style="font-weight:700;color:#1B2B4B;font-size:.9rem;margin:.3rem 0">{nom_t}</div>'
-                        f'<div style="color:#059669;font-weight:700">{qty_t} pièce(s) vendues</div></div>',
+                        f'<div style="font-size:2rem;margin-bottom:.4rem">{medailles[idx]}</div>'
+                        f'<div style="font-weight:800;color:#1B2B4B;font-size:1.05rem;margin:.3rem 0">{nom_t}</div>'
+                        f'<div style="color:#059669;font-weight:800;font-size:1.3rem">{qty_t}</div>'
+                        f'<div style="color:#8A9AB5;font-size:.85rem">pièces vendues</div>'
+                        f'</div>',
                         unsafe_allow_html=True)
         else:
             st.info("Aucune vente enregistrée.")
 
-        st.markdown("<hr>", unsafe_allow_html=True)
+        st.markdown("<div style='height:1.5rem'></div>", unsafe_allow_html=True)
 
         # ── Alertes stock faible ─────────────────────────────────────────────
-        st.markdown("### 🔔 Alertes stock")
+        st.markdown(
+            '<div style="font-size:1.5rem;font-weight:800;color:#1B2B4B;margin-bottom:1rem">🔔 Alertes stock</div>',
+            unsafe_allow_html=True)
         alertes = []
         for mk, d in stock_dash.items():
             nom_a = d.get("model_name", mk)
@@ -1500,7 +1519,7 @@ if tab_dashboard:
             if total_a == 0:
                 alertes.append(("🔴 RUPTURE", nom_a, total_a, seuil_a))
             elif total_a <= seuil_a:
-                alertes.append(("🟡 FAIBLE", nom_a, total_a, seuil_a))
+                alertes.append(("🟡 STOCK FAIBLE", nom_a, total_a, seuil_a))
 
         if not alertes:
             st.success("✅ Tous les articles ont un stock suffisant.")
@@ -1508,13 +1527,16 @@ if tab_dashboard:
             for badge_a, nom_a, total_a, seuil_a in alertes:
                 couleur_a = "#DC2626" if "RUPTURE" in badge_a else "#D97706"
                 st.markdown(
-                    f'<div style="background:#FFF;border-left:4px solid {couleur_a};'
-                    f'border:1px solid {couleur_a}33;border-radius:10px;padding:.8rem 1rem;'
-                    f'margin-bottom:.5rem;display:flex;align-items:center;justify-content:space-between">'
-                    f'<div><span style="background:{couleur_a};color:#FFF;font-size:.62rem;'
-                    f'font-weight:700;padding:2px 8px;border-radius:100px;margin-right:.6rem">{badge_a}</span>'
-                    f'<strong style="color:#1B2B4B">{nom_a}</strong></div>'
-                    f'<div style="font-size:.82rem;color:#4A5568">{total_a} pcs (seuil: {seuil_a})</div></div>',
+                    f'<div style="background:#FFF;border-left:6px solid {couleur_a};'
+                    f'border:1px solid {couleur_a}44;border-radius:12px;padding:1rem 1.4rem;'
+                    f'margin-bottom:.7rem;display:flex;align-items:center;justify-content:space-between">'
+                    f'<div style="display:flex;align-items:center;gap:.8rem">'
+                    f'<span style="background:{couleur_a};color:#FFF;font-size:.8rem;'
+                    f'font-weight:800;padding:4px 12px;border-radius:100px">{badge_a}</span>'
+                    f'<span style="font-weight:700;color:#1B2B4B;font-size:1rem">{nom_a}</span>'
+                    f'</div>'
+                    f'<div style="font-size:1rem;font-weight:700;color:{couleur_a}">{total_a} pcs</div>'
+                    f'</div>',
                     unsafe_allow_html=True)
 
         st.markdown("<hr>", unsafe_allow_html=True)
