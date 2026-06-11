@@ -1476,22 +1476,26 @@ if tab_dashboard:
             '<div style="font-size:1.5rem;font-weight:800;color:#1B2B4B;margin-bottom:1rem">🏆 Top 3 articles les plus vendus</div>',
             unsafe_allow_html=True)
         from collections import Counter
-        top_arts = Counter()
+        # Compter par model_key (clé réelle) pour retrouver la photo correctement
+        top_keys_counter = Counter()
+        key_to_name = {}
         for v in ventes_all:
-            top_arts[v.get("model_name","?")] += v.get("quantite", 1)
-        top3 = top_arts.most_common(3)
+            mk_v = v.get("model_key") or model_key(v.get("model_name","?"))
+            top_keys_counter[mk_v] += v.get("quantite", 1)
+            if mk_v not in key_to_name:
+                key_to_name[mk_v] = v.get("model_name","?")
+        top3 = top_keys_counter.most_common(3)
         if top3:
             t1, t2, t3 = st.columns(3)
             medailles = ["🥇", "🥈", "🥉"]
-            medal_colors = ["#D97706", "#6B7280", "#92400E"]
-            for idx, (col_t, (nom_t, qty_t)) in enumerate(zip([t1,t2,t3], top3)):
+            for idx, (col_t, (mk_t, qty_t)) in enumerate(zip([t1,t2,t3], top3)):
                 with col_t:
-                    mk_t = model_key(nom_t)
+                    nom_t = key_to_name.get(mk_t, mk_t)
                     b64_t = stock_dash.get(mk_t,{}).get("b64_thumb","")
                     photo_t = (
-                        f'<img src="data:image/png;base64,{b64_t}" style="width:100%;height:140px;object-fit:cover;border-radius:12px;margin-bottom:.7rem">'
+                        f'<img src="data:image/png;base64,{b64_t}" style="width:100%;height:160px;object-fit:cover;border-radius:12px;margin-bottom:.7rem">'
                         if b64_t else
-                        f'<div style="height:140px;background:#EEF1F7;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:3.5rem;margin-bottom:.7rem">👕</div>'
+                        f'<div style="height:160px;background:#EEF1F7;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:3.5rem;margin-bottom:.7rem">👕</div>'
                     )
                     st.markdown(
                         f'<div style="background:#FFF;border:2px solid #E0E5EF;border-radius:16px;padding:1.2rem;text-align:center;box-shadow:0 2px 10px #0001">'
