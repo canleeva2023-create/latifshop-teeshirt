@@ -1771,14 +1771,20 @@ if tab_new:
                         first_thumb = None
                         if uploaded_files:
                             for f in uploaded_files:
-                                raw = f.read()
-                                b64_display = img_to_b64(BytesIO(raw))
-                                photos_data_tmp.append({
-                                    "name": f.name.rsplit(".",1)[0],
-                                    "b64": b64_display
-                                })
-                                if first_thumb is None:
-                                    first_thumb = make_thumb(BytesIO(raw))
+                                try:
+                                    raw = f.getvalue() if hasattr(f, "getvalue") else f.read()
+                                    if not raw:
+                                        continue
+                                    b64_display = img_to_b64(BytesIO(raw))
+                                    fname = getattr(f, "name", "photo")
+                                    photos_data_tmp.append({
+                                        "name": fname.rsplit(".",1)[0] if "." in fname else fname,
+                                        "b64": b64_display
+                                    })
+                                    if first_thumb is None:
+                                        first_thumb = make_thumb(BytesIO(raw))
+                                except Exception:
+                                    pass
                         article = {
                             "model_name": model_name or "Sans nom",
                             "categorie":  selected_cat,
