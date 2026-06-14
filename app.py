@@ -595,6 +595,20 @@ def _gs_load(sheet_name, default):
         return None
     try:
         ws = ss.worksheet(sheet_name)
+        # Le stock utilise 1 ligne par modèle (col A = clé, col B = JSON)
+        if sheet_name == "stock":
+            rows = ws.get_all_values()
+            if not rows:
+                return default
+            result = {}
+            for r in rows:
+                if len(r) >= 2 and r[0] and r[1]:
+                    try:
+                        result[r[0]] = json.loads(r[1])
+                    except Exception:
+                        pass
+            return result if result else default
+        # Les autres feuilles utilisent A1 = JSON complet
         val = ws.acell("A1").value
         return json.loads(val) if val else default
     except Exception:
@@ -608,13 +622,21 @@ def _gs_save(sheet_name, data):
         try:
             ws = ss.worksheet(sheet_name)
         except Exception:
-            ws = ss.add_worksheet(title=sheet_name, rows=2, cols=2)
-        # Les photos sont stockées séparément — on les retire du JSON principal
-        if sheet_name in ("stock", "inventaire_historique"):
-            if isinstance(data, dict):
-                data_gs = {k: {kk: vv for kk, vv in v.items() if kk != "b64_thumb"}
-                           if isinstance(v, dict) else v for k, v in data.items()}
-            elif isinstance(data, list):
+            ws = ss.add_worksheet(title=sheet_name, rows=2000, cols=2)
+        # Le stock : 1 ligne par modèle (pas de limite de taille)
+        if sheet_name == "stock" and isinstance(data, dict):
+            rows = []
+            for mk, v in data.items():
+                entry = {kk: vv for kk, vv in v.items() if kk != "b64_thumb"} \
+                        if isinstance(v, dict) else v
+                rows.append([mk, json.dumps(entry, ensure_ascii=False)])
+            ws.clear()
+            if rows:
+                ws.update("A1", rows)
+            return
+        # Autres feuilles : JSON complet en A1 (sans b64_thumb)
+        if sheet_name == "inventaire_historique":
+            if isinstance(data, list):
                 data_gs = [{kk: vv for kk, vv in item.items() if kk != "b64_thumb"}
                            if isinstance(item, dict) else item for item in data]
             else:
