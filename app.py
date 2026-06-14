@@ -1701,7 +1701,47 @@ if tab_new:
 
         # ══ ÉTAPE 1 : Choisir la catégorie ═══════════════════════════════
         elif not st.session_state.get("new_grid_cat"):
-            st.markdown('<span class="section-label">Étape 1 — Choisir la catégorie</span>',
+            # ── Produits déjà enregistrés ───────────────────────────────
+            stock_ng = load_stock()
+            if stock_ng:
+                st.markdown(
+                    f'<div style="font-size:1.1rem;font-weight:800;color:#1B2B4B;'
+                    f'margin-bottom:.8rem">📋 {len(stock_ng)} produit(s) déjà enregistré(s)</div>',
+                    unsafe_allow_html=True)
+                ng_search = st.text_input("🔍 Rechercher un produit", placeholder="Nom du modèle…", key="ng_search")
+                ng_items = [(mk, v) for mk, v in stock_ng.items()
+                            if ng_search.lower() in v.get("model_name","").lower()]
+                for row_i in range(0, len(ng_items), 4):
+                    row_ng = ng_items[row_i:row_i+4]
+                    cols_ng = st.columns(4)
+                    for ci_ng, (mk_ng, v_ng) in enumerate(row_ng):
+                        total_ng = sum(q for cd in v_ng.get("stock",{}).values() for q in cd.values())
+                        b64_ng = v_ng.get("b64_thumb","")
+                        sbc_ng = "#059669" if total_ng > 5 else "#D97706" if total_ng > 0 else "#DC2626"
+                        with cols_ng[ci_ng]:
+                            photo_ng = (
+                                f'<img src="data:image/jpeg;base64,{b64_ng}" '
+                                f'style="width:100%;height:80px;object-fit:cover;'
+                                f'border-radius:8px 8px 0 0;display:block">'
+                                if b64_ng else
+                                f'<div style="width:100%;height:80px;background:#EEF1F7;'
+                                f'border-radius:8px 8px 0 0;display:flex;align-items:center;'
+                                f'justify-content:center;font-size:1.8rem">👕</div>'
+                            )
+                            st.markdown(
+                                f'<div style="border:1.5px solid #E0E5EF;border-radius:10px;'
+                                f'overflow:hidden;margin-bottom:.5rem">'
+                                f'{photo_ng}'
+                                f'<div style="padding:.4rem .5rem">'
+                                f'<div style="font-weight:700;font-size:.75rem;color:#1B2B4B;'
+                                f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+                                f'{v_ng.get("model_name",mk_ng)}</div>'
+                                f'<div style="font-size:.65rem;color:{sbc_ng};font-weight:600">'
+                                f'{total_ng} pcs</div></div></div>',
+                                unsafe_allow_html=True)
+                st.markdown("<hr>", unsafe_allow_html=True)
+
+            st.markdown('<span class="section-label">Étape 1 — Choisir la catégorie pour le nouveau produit</span>',
                         unsafe_allow_html=True)
             nb_cols = min(len(cats), 5)
             cat_cols = st.columns(nb_cols)
@@ -1754,6 +1794,44 @@ if tab_new:
                 if st.button("↩  Changer de catégorie", key="btn_change_cat"):
                     st.session_state["new_grid_cat"] = None
                     st.rerun()
+
+            # ── Produits existants de cette catégorie ─────────────────
+            stock_ng2 = load_stock()
+            arts_cat_ng = [(mk, v) for mk, v in stock_ng2.items()
+                           if v.get("categorie","").strip().lower() == selected_cat.strip().lower()]
+            if arts_cat_ng:
+                st.markdown(
+                    f'<div style="font-size:1rem;font-weight:700;color:#1B2B4B;margin:.6rem 0 .4rem">'
+                    f'📦 {len(arts_cat_ng)} produit(s) déjà dans « {selected_cat} »</div>',
+                    unsafe_allow_html=True)
+                for row_i2 in range(0, len(arts_cat_ng), 5):
+                    row_ng2 = arts_cat_ng[row_i2:row_i2+5]
+                    cols_ng2 = st.columns(5)
+                    for ci2, (mk2, v2) in enumerate(row_ng2):
+                        total2 = sum(q for cd in v2.get("stock",{}).values() for q in cd.values())
+                        b64_2 = v2.get("b64_thumb","")
+                        sbc2 = "#059669" if total2 > 5 else "#D97706" if total2 > 0 else "#DC2626"
+                        with cols_ng2[ci2]:
+                            photo2 = (
+                                f'<img src="data:image/jpeg;base64,{b64_2}" '
+                                f'style="width:100%;height:70px;object-fit:cover;'
+                                f'border-radius:6px 6px 0 0;display:block">'
+                                if b64_2 else
+                                f'<div style="width:100%;height:70px;background:#EEF1F7;'
+                                f'border-radius:6px 6px 0 0;display:flex;align-items:center;'
+                                f'justify-content:center;font-size:1.4rem">👕</div>'
+                            )
+                            st.markdown(
+                                f'<div style="border:1.5px solid #E0E5EF;border-radius:8px;'
+                                f'overflow:hidden;margin-bottom:.4rem">'
+                                f'{photo2}'
+                                f'<div style="padding:.3rem .4rem">'
+                                f'<div style="font-weight:700;font-size:.7rem;color:#1B2B4B;'
+                                f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+                                f'{v2.get("model_name",mk2)}</div>'
+                                f'<div style="font-size:.62rem;color:{sbc2};font-weight:600">'
+                                f'{total2} pcs</div></div></div>',
+                                unsafe_allow_html=True)
 
             st.markdown("<hr>", unsafe_allow_html=True)
             st.markdown('<span class="section-label">Étape 2 — Photos & informations du modèle</span>',
