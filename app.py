@@ -3009,36 +3009,36 @@ if tab_commandes:
         st.markdown("### 📦 Historique des arrivages")
         arr_hist = load_arrivages()
         if not arr_hist:
-        st.info("Aucun arrivage enregistré.")
+            st.info("Aucun arrivage enregistré.")
         else:
-        st.markdown(f"**{len(arr_hist)}** arrivage(s) enregistré(s)")
-        # Filtre modèle
-        arr_models = ["Tous"] + list(dict.fromkeys(a["model_name"] for a in arr_hist))
-        arr_fil = st.selectbox("Filtrer par modèle",arr_models,key="arr_hist_fil")
-        arr_show = arr_hist if arr_fil=="Tous" else [a for a in arr_hist if a["model_name"]==arr_fil]
-        for a in arr_show:
-            detail_html=""
-            for col,sizes in a.get("detail",{}).items():
-                hx=HEX_MAP.get(col,"#888")
-                sizes_str=" · ".join(f"{sz}×{q}" for sz,q in sizes.items())
-                detail_html+=f'<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 6px 2px 0"><span style="width:10px;height:10px;border-radius:50%;background:{hx};border:1px solid #ccc;display:inline-block"></span>{col}: {sizes_str}</span>'
-            st.markdown(f"""
-            <div class="history-card" style="border-left:3px solid #1565C0">
-                <div style="display:flex;justify-content:space-between">
-                    <div class="history-date">📅 {a.get("date","")}</div>
-                    <div style="font-size:.72rem;color:#FFF;background:#1565C0;padding:2px 10px">{a.get("total",0)} pièces</div>
-                </div>
-                <div class="history-title">{a.get("model_name","")}</div>
-                <div style="font-size:.75rem;color:#666;margin:3px 0">🏭 {a.get("fournisseur","—")}</div>
-                <div style="margin-top:6px;font-size:.75rem">{detail_html}</div>
-            </div>""", unsafe_allow_html=True)
-        # Export
-        df_arr_h = pd.DataFrame([{"Date":a["date"],"Modèle":a["model_name"],
-            "Fournisseur":a.get("fournisseur","—"),"Total pièces":a.get("total",0)} for a in arr_show])
-        st.download_button("📥 Exporter arrivages (Excel)",
-            _df_to_excel(df_arr_h,"Arrivages"),
-            f"arrivages_{datetime.now().strftime('%Y%m%d')}.xlsx",
-            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            st.markdown(f"**{len(arr_hist)}** arrivage(s) enregistré(s)")
+            # Filtre modèle
+            arr_models = ["Tous"] + list(dict.fromkeys(a["model_name"] for a in arr_hist))
+            arr_fil = st.selectbox("Filtrer par modèle",arr_models,key="arr_hist_fil")
+            arr_show = arr_hist if arr_fil=="Tous" else [a for a in arr_hist if a["model_name"]==arr_fil]
+            for a in arr_show:
+                detail_html=""
+                for col,sizes in a.get("detail",{}).items():
+                    hx=HEX_MAP.get(col,"#888")
+                    sizes_str=" · ".join(f"{sz}×{q}" for sz,q in sizes.items())
+                    detail_html+=f'<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 6px 2px 0"><span style="width:10px;height:10px;border-radius:50%;background:{hx};border:1px solid #ccc;display:inline-block"></span>{col}: {sizes_str}</span>'
+                st.markdown(f"""
+                <div class="history-card" style="border-left:3px solid #1565C0">
+                    <div style="display:flex;justify-content:space-between">
+                        <div class="history-date">📅 {a.get("date","")}</div>
+                        <div style="font-size:.72rem;color:#FFF;background:#1565C0;padding:2px 10px">{a.get("total",0)} pièces</div>
+                    </div>
+                    <div class="history-title">{a.get("model_name","")}</div>
+                    <div style="font-size:.75rem;color:#666;margin:3px 0">🏭 {a.get("fournisseur","—")}</div>
+                    <div style="margin-top:6px;font-size:.75rem">{detail_html}</div>
+                </div>""", unsafe_allow_html=True)
+            # Export
+            df_arr_h = pd.DataFrame([{"Date":a["date"],"Modèle":a["model_name"],
+                "Fournisseur":a.get("fournisseur","—"),"Total pièces":a.get("total",0)} for a in arr_show])
+            st.download_button("📥 Exporter arrivages (Excel)",
+                _df_to_excel(df_arr_h,"Arrivages"),
+                f"arrivages_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ══════════════════════════════════════════════════════════════════════════════
