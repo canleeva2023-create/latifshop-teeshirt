@@ -608,8 +608,8 @@ def _gs_save(sheet_name, data):
         try:
             ws = ss.worksheet(sheet_name)
         except Exception:
-            ws = ss.add_worksheet(title=sheet_name, rows=1, cols=1)
-        # Strip b64_thumb from stock before saving to GSheets (too large for a cell)
+            ws = ss.add_worksheet(title=sheet_name, rows=2, cols=2)
+        # Les photos sont stockées séparément — on les retire du JSON principal
         if sheet_name in ("stock", "inventaire_historique"):
             if isinstance(data, dict):
                 data_gs = {k: {kk: vv for kk, vv in v.items() if kk != "b64_thumb"}
@@ -621,9 +621,38 @@ def _gs_save(sheet_name, data):
                 data_gs = data
         else:
             data_gs = data
-        ws.update("A1", json.dumps(data_gs, ensure_ascii=False))
+        ws.update("A1", [[json.dumps(data_gs, ensure_ascii=False)]])
     except Exception:
         pass
+
+def _gs_save_photos(photos_dict):
+    """Sauvegarde {model_key: b64_thumb} dans une feuille dédiée (1 ligne par article)."""
+    ss = _gs_spreadsheet()
+    if ss is None or not photos_dict:
+        return
+    try:
+        try:
+            ws = ss.worksheet("_photos")
+        except Exception:
+            ws = ss.add_worksheet(title="_photos", rows=200, cols=2)
+        rows = [[mk, thumb] for mk, thumb in photos_dict.items() if thumb]
+        if rows:
+            ws.clear()
+            ws.update("A1", rows)
+    except Exception:
+        pass
+
+def _gs_load_photos():
+    """Charge {model_key: b64_thumb} depuis la feuille dédiée."""
+    ss = _gs_spreadsheet()
+    if ss is None:
+        return {}
+    try:
+        ws = ss.worksheet("_photos")
+        rows = ws.get_all_values()
+        return {r[0]: r[1] for r in rows if len(r) >= 2 and r[0] and r[1]}
+    except Exception:
+        return {}
 
 # ══════════════════════════════════════════════════════════════════════════════
 # FONCTIONS I/O
@@ -632,18 +661,24 @@ def _load(path, default):
     sheet_name = os.path.splitext(os.path.basename(path))[0]
     gs_data = _gs_load(sheet_name, default)
     if gs_data is not None:
-        # GSheets ne stocke pas b64_thumb (trop grand) — on le récupère du fichier local
-        if sheet_name == "stock" and os.path.exists(path):
-            try:
-                with open(path, "r", encoding="utf-8") as f:
-                    local_data = json.load(f)
+        # Fusionner les photos depuis la feuille GSheets _photos (cloud-persistent)
+        if sheet_name == "stock":
+            gs_photos = _gs_load_photos()
+            if gs_photos:
                 for mk, entry in gs_data.items():
-                    if isinstance(entry, dict) and mk in local_data:
-                        thumb = local_data[mk].get("b64_thumb", "")
-                        if thumb:
-                            entry["b64_thumb"] = thumb
-            except Exception:
-                pass
+                    if isinstance(entry, dict) and mk in gs_photos:
+                        entry["b64_thumb"] = gs_photos[mk]
+            elif os.path.exists(path):
+                try:
+                    with open(path, "r", encoding="utf-8") as f:
+                        local_data = json.load(f)
+                    for mk, entry in gs_data.items():
+                        if isinstance(entry, dict) and mk in local_data:
+                            thumb = local_data[mk].get("b64_thumb", "")
+                            if thumb:
+                                entry["b64_thumb"] = thumb
+                except Exception:
+                    pass
         return gs_data
     if os.path.exists(path):
         with open(path, "r", encoding="utf-8") as f:
@@ -658,6 +693,13 @@ def _save(path, data):
 
 def load_history():   return _load(SAVE_FILE, [])
 def load_stock():     return _load(STOCK_FILE, {})
+
+def save_stock(d):
+    _save(STOCK_FILE, d)
+    # Sauvegarder les photos dans une feuille GSheets dédiée
+    photos = {mk: v["b64_thumb"] for mk, v in d.items()
+              if isinstance(v, dict) and v.get("b64_thumb")}
+    _gs_save_photos(photos)
 def load_ventes():    return _load(VENTES_FILE, [])
 def load_arrivages():    return _load(ARRIVAGES_FILE, [])
 def load_categories():      return _load(CATEGORIES_FILE, [])
@@ -673,7 +715,6 @@ def load_profils():
 
 def save_entry(e):
     h = load_history(); h.insert(0, e); _save(SAVE_FILE, h)
-def save_stock(d):    _save(STOCK_FILE, d)
 def save_ventes(v):   _save(VENTES_FILE, v)
 def save_profils(d):  _save(PROFILS_FILE, d)
 def save_arrivage(a):
