@@ -1,4 +1,4 @@
-import streamlit as st
+﻿import streamlit as st
 import streamlit.components.v1 as components
 from PIL import Image
 from io import BytesIO
@@ -1485,12 +1485,12 @@ with header_right:
 is_admin = st.session_state.user_role == "admin"
 
 if is_admin:
-    tab_dashboard, tab_new, tab_hist, tab_stock, tab_ventes, tab_ali_admin, tab_admin = st.tabs([
+    tab_dashboard, tab_new, tab_hist, tab_stock, tab_commandes, tab_ventes, tab_ali_admin, tab_admin = st.tabs([
         "📊  Dashboard", "✦  Nouvelle Grille", "📋  Historique",
-        "📦  Stock & Commandes", "💰  Ventes", "📥  Alimentation", "⚙  Profils & Config"])
+        "📦  Stock", "🛒  Commandes", "💰  Ventes", "📥  Alimentation", "⚙  Profils & Config"])
 else:
     tab_ventes = st.tabs(["💰  Saisie des Ventes"])[0]
-    tab_dashboard = tab_new = tab_hist = tab_stock = tab_ali_admin = tab_admin = None
+    tab_dashboard = tab_new = tab_hist = tab_stock = tab_commandes = tab_ali_admin = tab_admin = None
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ONGLET DASHBOARD (admin seulement)
@@ -2587,431 +2587,436 @@ if tab_stock:
                             st.session_state.stock_pending_confirm = False
                             st.rerun()
 
-            st.markdown("<hr>",unsafe_allow_html=True)
-            st.markdown("### 🛒 Liste de commandes")
+# ══════════════════════════════════════════════════════════════════════════════
+# ONGLET COMMANDES (admin seulement)
+# ══════════════════════════════════════════════════════════════════════════════
+if tab_commandes:
+    with tab_commandes:
+        history_s=load_history(); stock_data=load_stock()
+        st.markdown("### 🛒 Liste de commandes")
 
-            # ── Session state navigation commandes ──────────────────────
-            for _k,_v in [("cmd_cat", None), ("cmd_art", None)]:
-                if _k not in st.session_state:
-                    st.session_state[_k] = _v
+        # ── Session state navigation commandes ──────────────────────
+        for _k,_v in [("cmd_cat", None), ("cmd_art", None)]:
+            if _k not in st.session_state:
+                st.session_state[_k] = _v
 
-            orders=get_order_list(stock_data)
-            all_orders_tp = sum(o["À commander"] for o in orders)
+        orders=get_order_list(stock_data)
+        all_orders_tp = sum(o["À commander"] for o in orders)
 
-            # Index mk → entry historique
-            mk_idx_cmd = {model_key(e["model_name"]): e for e in history_s}
+        # Index mk → entry historique
+        mk_idx_cmd = {model_key(e["model_name"]): e for e in history_s}
 
-            # ── Métriques globales toujours visibles ─────────────────────
+        # ── Métriques globales toujours visibles ─────────────────────
+        if orders:
+            m1,m2,m3=st.columns(3)
+            m1.metric("Références", len(orders))
+            m2.metric("Pièces totales", all_orders_tp)
+            m3.metric("Modèles", len(set(o["Modèle"] for o in orders)))
+            st.markdown(
+                '<div style="font-size:.7rem;color:#8A9AB5;margin:.3rem 0 .8rem">'
+                '🟢 OK &nbsp;|&nbsp; 🟡 Stock faible &nbsp;|&nbsp; 🔴 Rupture</div>',
+                unsafe_allow_html=True)
+        else:
+            st.success("✅ Stock suffisant — aucune commande nécessaire !")
+
+        # ════════════════════════════════════════════════════════
+        # ÉTAPE A — Choisir une catégorie
+        # ════════════════════════════════════════════════════════
+        if st.session_state.cmd_cat is None:
             if orders:
-                m1,m2,m3=st.columns(3)
-                m1.metric("Références", len(orders))
-                m2.metric("Pièces totales", all_orders_tp)
-                m3.metric("Modèles", len(set(o["Modèle"] for o in orders)))
-                st.markdown(
-                    '<div style="font-size:.7rem;color:#8A9AB5;margin:.3rem 0 .8rem">'
-                    '🟢 OK &nbsp;|&nbsp; 🟡 Stock faible &nbsp;|&nbsp; 🔴 Rupture</div>',
-                    unsafe_allow_html=True)
-            else:
-                st.success("✅ Stock suffisant — aucune commande nécessaire !")
-
-            # ════════════════════════════════════════════════════════
-            # ÉTAPE A — Choisir une catégorie
-            # ════════════════════════════════════════════════════════
-            if st.session_state.cmd_cat is None:
-                if orders:
-                    # Construire la liste des catégories qui ont des articles à commander
-                    cats_cmd = {}   # cat_name → liste de mk
-                    for o in orders:
-                        mk_o = model_key(o["Modèle"])
-                        e_o  = mk_idx_cmd.get(mk_o, {})
-                        cat_o = e_o.get("categorie","") or "Non classé"
-                        cats_cmd.setdefault(cat_o, set()).add(mk_o)
-
-                    st.markdown(
-                        '<span class="section-label">Choisissez une catégorie</span>',
-                        unsafe_allow_html=True)
-
-                    clicked_cmd_cat = None
-                    NB_CAT_COLS = 3
-                    cats_list = list(cats_cmd.items())
-                    for ri in range(0, len(cats_list), NB_CAT_COLS):
-                        ca0, ca1, ca2 = st.columns(3)
-                        for ci_cat, cc in enumerate([ca0, ca1, ca2]):
-                            if ri + ci_cat >= len(cats_list):
-                                break
-                            cat_nm, mks_set = cats_list[ri + ci_cat]
-                            nb_models = len(mks_set)
-                            nb_refs   = sum(1 for o in orders
-                                            if (mk_idx_cmd.get(model_key(o["Modèle"]),{})
-                                                .get("categorie","Non classé") or "Non classé")
-                                               == cat_nm)
-                            # Icône de la catégorie
-                            cat_obj = next((c for c in cats_s
-                                            if (c.get("name") if isinstance(c,dict) else c)
-                                               == cat_nm), {})
-                            cat_icon = cat_obj.get("icon","📦") if isinstance(cat_obj,dict) else "📦"
-
-                            with cc:
-                                st.markdown(
-                                    f'<div style="background:#FFFFFF;border:2px solid #E0E5EF;'
-                                    f'border-radius:14px;padding:1.1rem .8rem;text-align:center;'
-                                    f'margin-bottom:.5rem;'
-                                    f'box-shadow:0 2px 8px rgba(27,43,75,.06)">'
-                                    f'<div style="font-size:2.2rem;margin-bottom:.4rem">'
-                                    f'{cat_icon}</div>'
-                                    f'<div style="font-weight:800;color:#1B2B4B;font-size:.9rem;'
-                                    f'margin-bottom:.3rem">{cat_nm}</div>'
-                                    f'<div style="font-size:.68rem;color:#8A9AB5">'
-                                    f'{nb_models} modèle(s)</div>'
-                                    f'<div style="font-size:.68rem;color:#DC2626;font-weight:700;'
-                                    f'margin-top:.2rem">{nb_refs} réf. à commander</div>'
-                                    f'</div>', unsafe_allow_html=True)
-                                if st.button(f"Voir {cat_nm}", key=f"cmd_cat_{cat_nm}",
-                                             use_container_width=True):
-                                    clicked_cmd_cat = cat_nm
-
-                    if clicked_cmd_cat:
-                        st.session_state.cmd_cat = clicked_cmd_cat
-                        st.session_state.cmd_art = None
-                        st.rerun()
-
-            # ════════════════════════════════════════════════════════
-            # ÉTAPE B — Choisir un article dans la catégorie
-            # ════════════════════════════════════════════════════════
-            elif st.session_state.cmd_art is None:
-                cat_sel_cmd = st.session_state.cmd_cat
-                # Bouton retour
-                if st.button("← Retour catégories", key="cmd_back_cat"):
-                    st.session_state.cmd_cat = None
-                    st.rerun()
-
-                st.markdown(
-                    f'<div style="font-size:.78rem;color:#8A9AB5;margin:.4rem 0 .7rem">'
-                    f'📂 {cat_sel_cmd}</div>', unsafe_allow_html=True)
-                st.markdown('<span class="section-label">Choisissez un article</span>',
-                            unsafe_allow_html=True)
-
-                # Articles de cette catégorie qui ont des commandes
-                arts_cmd = []
-                seen_cmd = set()
+                # Construire la liste des catégories qui ont des articles à commander
+                cats_cmd = {}   # cat_name → liste de mk
                 for o in orders:
                     mk_o = model_key(o["Modèle"])
-                    if mk_o in seen_cmd:
-                        continue
-                    e_o   = mk_idx_cmd.get(mk_o, {})
+                    e_o  = mk_idx_cmd.get(mk_o, {})
                     cat_o = e_o.get("categorie","") or "Non classé"
-                    if cat_o != cat_sel_cmd:
-                        continue
-                    seen_cmd.add(mk_o)
-                    arts_cmd.append((mk_o, o["Modèle"]))
-
-                clicked_cmd_art = None
-                NB_ART_COLS = 3
-                for ri in range(0, len(arts_cmd), NB_ART_COLS):
-                    a0, a1, a2 = st.columns(3)
-                    for ci_art, ac in enumerate([a0, a1, a2]):
-                        if ri + ci_art >= len(arts_cmd):
-                            break
-                        mk_a, name_a = arts_cmd[ri + ci_art]
-                        entry_a = mk_idx_cmd.get(mk_a, {})
-                        sd_a    = stock_data.get(mk_a, {})
-                        seuil_a = sd_a.get("seuil_min", 0)
-                        stk_a   = sd_a.get("stock", {})
-                        total_a = sum(v for cd in stk_a.values() for v in cd.values())
-                        cmd_a   = sum(
-                            max(0, seuil_a - stk_a.get(c,{}).get(s,0))
-                            for c in sd_a.get("colors",[])
-                            for s in sd_a.get("sizes",[]))
-                        b64_a   = entry_a.get("b64_thumb") or sd_a.get("b64_thumb")
-
-                        if b64_a:
-                            img_a = (f'<img src="data:image/png;base64,{b64_a}" '
-                                     f'style="width:100%;height:120px;object-fit:cover;'
-                                     f'display:block">')
-                        else:
-                            img_a = (f'<div style="width:100%;height:120px;'
-                                     f'background:linear-gradient(135deg,#EEF1F7,#E0E5EF);'
-                                     f'display:flex;align-items:center;justify-content:center;'
-                                     f'font-size:3rem">👕</div>')
-
-                        badge_col_a = "#DC2626" if total_a == 0 else "#D97706"
-                        badge_txt_a = "Rupture" if total_a == 0 else "Stock faible"
-
-                        with ac:
-                            st.markdown(
-                                f'<div style="background:#FFFFFF;border:2px solid #E0E5EF;'
-                                f'border-radius:14px;overflow:hidden;margin-bottom:.5rem;'
-                                f'box-shadow:0 2px 8px rgba(27,43,75,.06)">'
-                                f'<div style="position:relative">{img_a}'
-                                f'<span style="position:absolute;top:7px;right:7px;'
-                                f'background:{badge_col_a};color:#FFF;font-size:.55rem;'
-                                f'font-weight:700;padding:2px 7px;border-radius:20px;'
-                                f'text-transform:uppercase">{badge_txt_a}</span></div>'
-                                f'<div style="padding:.6rem .75rem">'
-                                f'<div style="font-weight:800;color:#1B2B4B;font-size:.86rem;'
-                                f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
-                                f'{name_a}</div>'
-                                f'<div style="font-size:.68rem;color:#8A9AB5;margin:.2rem 0">'
-                                f'{total_a} pcs en stock</div>'
-                                f'<div style="font-size:.72rem;color:#DC2626;font-weight:700">'
-                                f'+{cmd_a} pcs à commander</div>'
-                                f'</div></div>', unsafe_allow_html=True)
-                            if st.button("📊 Voir la situation", key=f"cmd_art_{mk_a}",
-                                         use_container_width=True):
-                                clicked_cmd_art = mk_a
-
-                if clicked_cmd_art:
-                    st.session_state.cmd_art = clicked_cmd_art
-                    st.rerun()
-
-            # ════════════════════════════════════════════════════════
-            # ÉTAPE C — Situation complète de l'article
-            # ════════════════════════════════════════════════════════
-            else:
-                mk_det  = st.session_state.cmd_art
-                sd_det  = stock_data.get(mk_det, {})
-                entry_det = mk_idx_cmd.get(mk_det, {})
-                colors_det = sd_det.get("colors", [])
-                sizes_det  = sd_det.get("sizes",  [])
-                stk_det    = sd_det.get("stock",  {})
-                seuil_det  = sd_det.get("seuil_min", 0)
-                name_det   = sd_det.get("model_name", mk_det)
-
-                # Boutons navigation
-                nav1, nav2 = st.columns([1, 1])
-                with nav1:
-                    if st.button("← Retour articles", key="cmd_back_art"):
-                        st.session_state.cmd_art = None
-                        st.rerun()
-                with nav2:
-                    if st.button("⌂ Retour catégories", key="cmd_back_cat2"):
-                        st.session_state.cmd_cat = None
-                        st.session_state.cmd_art = None
-                        st.rerun()
-
-                # Carte article
-                b64_det2 = entry_det.get("b64_thumb") or sd_det.get("b64_thumb")
-                if b64_det2:
-                    ph_det = (f'<img src="data:image/png;base64,{b64_det2}" '
-                              f'style="width:72px;height:88px;object-fit:cover;'
-                              f'border-radius:8px;border:2px solid #E0E5EF;flex-shrink:0">')
-                else:
-                    ph_det = (f'<div style="width:72px;height:88px;background:#EEF1F7;'
-                              f'border-radius:8px;border:2px solid #E0E5EF;display:flex;'
-                              f'align-items:center;justify-content:center;'
-                              f'font-size:2rem;flex-shrink:0">👕</div>')
-
-                total_det = sum(v for cd in stk_det.values() for v in cd.values())
-                cmd_det   = sum(max(0, seuil_det - stk_det.get(c,{}).get(s,0))
-                                for c in colors_det for s in sizes_det)
-                cat_det   = entry_det.get("categorie","") or "Non classé"
-
-                color_dots = "".join(
-                    f'<span style="width:13px;height:13px;border-radius:50%;'
-                    f'background:{HEX_MAP.get(c,"#888")};border:2px solid #FFF;'
-                    f'box-shadow:0 1px 3px rgba(0,0,0,.2);display:inline-block;'
-                    f'margin-right:3px"></span>'
-                    for c in colors_det)
+                    cats_cmd.setdefault(cat_o, set()).add(mk_o)
 
                 st.markdown(
-                    f'<div style="display:flex;gap:.9rem;align-items:center;'
-                    f'background:#FFFFFF;border:2px solid #E0E5EF;border-radius:14px;'
-                    f'padding:.8rem 1rem;margin-bottom:1rem;'
-                    f'box-shadow:0 3px 12px rgba(27,43,75,.07)">'
-                    f'{ph_det}'
-                    f'<div style="flex:1;min-width:0">'
-                    f'<div style="font-size:.6rem;color:var(--gold);font-weight:700;'
-                    f'text-transform:uppercase;letter-spacing:.1em">📂 {cat_det}</div>'
-                    f'<div style="font-size:1.1rem;font-weight:800;color:#1B2B4B;'
-                    f'margin:.15rem 0">{name_det}</div>'
-                    f'<div style="margin-bottom:.3rem">{color_dots}</div>'
-                    f'<div style="font-size:.7rem;color:#8A9AB5">'
-                    f'{total_det} pcs en stock · Seuil : {seuil_det}</div>'
-                    f'</div>'
-                    f'<div style="text-align:center;flex-shrink:0">'
-                    f'<div style="font-size:1.4rem;font-weight:900;color:#DC2626">+{cmd_det}</div>'
-                    f'<div style="font-size:.6rem;color:#8A9AB5;text-transform:uppercase;'
-                    f'letter-spacing:.08em">à commander</div>'
-                    f'</div></div>', unsafe_allow_html=True)
-
-                # Légende
-                st.markdown(
-                    '<div style="display:flex;gap:1rem;font-size:.62rem;color:#8A9AB5;'
-                    'margin-bottom:.5rem;flex-wrap:wrap">'
-                    '<span style="display:flex;align-items:center;gap:4px">'
-                    '<span style="width:12px;height:12px;border-radius:2px;'
-                    'background:#F0FFF4;border:1px solid #059669"></span>OK</span>'
-                    '<span style="display:flex;align-items:center;gap:4px">'
-                    '<span style="width:12px;height:12px;border-radius:2px;'
-                    'background:#FFF8E1;border:1px solid #D97706"></span>Faible</span>'
-                    '<span style="display:flex;align-items:center;gap:4px">'
-                    '<span style="width:12px;height:12px;border-radius:2px;'
-                    'background:#FFE4E4;border:1px solid #DC2626"></span>Rupture</span>'
-                    '<span style="margin-left:auto;font-style:italic">'
-                    'Stock · <span style="color:#DC2626;font-weight:700">+N</span> = à commander'
-                    '</span></div>', unsafe_allow_html=True)
-
-                # Grille tailles × couleurs
-                th_det = "".join(
-                    f'<th style="padding:8px 6px;text-align:center;font-size:.66rem;'
-                    f'color:#8A9AB5;text-transform:uppercase;letter-spacing:.08em;'
-                    f'border-bottom:2px solid #EEF1F7;border-right:1px solid #EEF1F7;'
-                    f'min-width:48px">{s}</th>'
-                    for s in sizes_det)
-
-                rows_det = ""
-                for ci_d, c_d in enumerate(colors_det):
-                    hx_d   = HEX_MAP.get(c_d, "#888")
-                    row_bg = "#FFFFFF" if ci_d % 2 == 0 else "#F8F9FC"
-                    cells_d = ""
-                    for s_d in sizes_det:
-                        q_d = stk_det.get(c_d, {}).get(s_d, 0)
-                        m_d = max(0, seuil_det - q_d)
-                        if q_d == 0:
-                            cbg = "#FFE4E4"; cq = "#DC2626"
-                            plus = (f'<div style="font-size:.62rem;color:#DC2626;'
-                                    f'font-weight:800;line-height:1.1">+{m_d}</div>'
-                                    if m_d > 0 else "")
-                        elif m_d > 0:
-                            cbg = "#FFF8E1"; cq = "#D97706"
-                            plus = (f'<div style="font-size:.62rem;color:#D97706;'
-                                    f'font-weight:800;line-height:1.1">+{m_d}</div>')
-                        else:
-                            cbg = "#F0FFF4"; cq = "#059669"; plus = ""
-                        cells_d += (
-                            f'<td style="padding:7px 4px;text-align:center;'
-                            f'background:{cbg};border-bottom:1px solid #EEF1F7;'
-                            f'border-right:1px solid #EEF1F7">'
-                            f'<div style="font-size:.88rem;font-weight:800;'
-                            f'color:{cq};line-height:1.2">{q_d}</div>'
-                            f'{plus}</td>')
-                    rows_det += (
-                        f'<tr>'
-                        f'<td style="padding:7px 10px;border-bottom:1px solid #EEF1F7;'
-                        f'border-right:2px solid #EEF1F7;background:{row_bg};white-space:nowrap">'
-                        f'<span style="display:inline-flex;align-items:center;gap:7px">'
-                        f'<span style="width:13px;height:13px;border-radius:50%;'
-                        f'background:{hx_d};flex-shrink:0;'
-                        f'border:1.5px solid rgba(0,0,0,.12)"></span>'
-                        f'<span style="font-size:.8rem;font-weight:600;color:#1B2B4B">'
-                        f'{c_d}</span></span></td>'
-                        f'{cells_d}</tr>')
-
-                st.markdown(
-                    f'<div style="background:#FFFFFF;border:2px solid #E0E5EF;'
-                    f'border-radius:14px;overflow:hidden;'
-                    f'box-shadow:0 3px 12px rgba(27,43,75,.07)">'
-                    f'<div style="overflow-x:auto">'
-                    f'<table style="width:100%;border-collapse:collapse">'
-                    f'<thead><tr style="background:#F4F6FA">'
-                    f'<th style="padding:8px 10px;text-align:left;font-size:.62rem;'
-                    f'color:#8A9AB5;text-transform:uppercase;letter-spacing:.1em;'
-                    f'border-bottom:2px solid #EEF1F7;border-right:2px solid #EEF1F7">'
-                    f'Couleur</th>{th_det}</tr></thead>'
-                    f'<tbody>{rows_det}</tbody>'
-                    f'</table></div></div>',
+                    '<span class="section-label">Choisissez une catégorie</span>',
                     unsafe_allow_html=True)
 
-            # ── Exports globaux ──────────────────────────────────────────
-            if orders:
-                st.markdown("<div style='margin-top:.8rem'></div>",
-                            unsafe_allow_html=True)
-                df_o = pd.DataFrame(orders)
-                e1, e2, e3 = st.columns(3)
-                with e1:
-                    st.download_button(
-                        "📥 Excel",
-                        build_order_excel(orders),
-                        f"commande_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-                        use_container_width=True)
-                with e2:
-                    st.download_button(
-                        "📄 CSV",
-                        df_o.to_csv(index=False).encode("utf-8-sig"),
-                        f"commande_{datetime.now().strftime('%Y%m%d')}.csv",
-                        "text/csv",
-                        use_container_width=True)
-                with e3:
-                    lines = [f"🛒 *COMMANDE — {datetime.now().strftime('%d/%m/%Y')}*\n"]
-                    cm = ""
-                    for o in orders:
-                        if o["Modèle"] != cm:
-                            cm = o["Modèle"]
-                            lines.append(f"\n*{cm}*")
-                        lines.append(
-                            f"  {'🔴' if o['En stock']==0 else '🟡'} "
-                            f"{o['Couleur']}/{o['Taille']} → *{o['À commander']}* pcs")
-                    lines.append(f"\n_Total: {all_orders_tp} pièces_")
-                    wa_button("https://wa.me/?text=" + urllib.parse.quote("\n".join(lines)))
+                clicked_cmd_cat = None
+                NB_CAT_COLS = 3
+                cats_list = list(cats_cmd.items())
+                for ri in range(0, len(cats_list), NB_CAT_COLS):
+                    ca0, ca1, ca2 = st.columns(3)
+                    for ci_cat, cc in enumerate([ca0, ca1, ca2]):
+                        if ri + ci_cat >= len(cats_list):
+                            break
+                        cat_nm, mks_set = cats_list[ri + ci_cat]
+                        nb_models = len(mks_set)
+                        nb_refs   = sum(1 for o in orders
+                                        if (mk_idx_cmd.get(model_key(o["Modèle"]),{})
+                                            .get("categorie","Non classé") or "Non classé")
+                                           == cat_nm)
+                        # Icône de la catégorie
+                        cat_obj = next((c for c in cats_s
+                                        if (c.get("name") if isinstance(c,dict) else c)
+                                           == cat_nm), {})
+                        cat_icon = cat_obj.get("icon","📦") if isinstance(cat_obj,dict) else "📦"
 
-            st.markdown("<hr>",unsafe_allow_html=True)
-            st.markdown("### 📬 Arrivage")
-            st.caption("Quantités reçues → ajoutées au stock automatiquement.")
-            if not stock_data:
-                st.warning("Aucun stock configuré.")
+                        with cc:
+                            st.markdown(
+                                f'<div style="background:#FFFFFF;border:2px solid #E0E5EF;'
+                                f'border-radius:14px;padding:1.1rem .8rem;text-align:center;'
+                                f'margin-bottom:.5rem;'
+                                f'box-shadow:0 2px 8px rgba(27,43,75,.06)">'
+                                f'<div style="font-size:2.2rem;margin-bottom:.4rem">'
+                                f'{cat_icon}</div>'
+                                f'<div style="font-weight:800;color:#1B2B4B;font-size:.9rem;'
+                                f'margin-bottom:.3rem">{cat_nm}</div>'
+                                f'<div style="font-size:.68rem;color:#8A9AB5">'
+                                f'{nb_models} modèle(s)</div>'
+                                f'<div style="font-size:.68rem;color:#DC2626;font-weight:700;'
+                                f'margin-top:.2rem">{nb_refs} réf. à commander</div>'
+                                f'</div>', unsafe_allow_html=True)
+                            if st.button(f"Voir {cat_nm}", key=f"cmd_cat_{cat_nm}",
+                                         use_container_width=True):
+                                clicked_cmd_cat = cat_nm
+
+                if clicked_cmd_cat:
+                    st.session_state.cmd_cat = clicked_cmd_cat
+                    st.session_state.cmd_art = None
+                    st.rerun()
+
+        # ════════════════════════════════════════════════════════
+        # ÉTAPE B — Choisir un article dans la catégorie
+        # ════════════════════════════════════════════════════════
+        elif st.session_state.cmd_art is None:
+            cat_sel_cmd = st.session_state.cmd_cat
+            # Bouton retour
+            if st.button("← Retour catégories", key="cmd_back_cat"):
+                st.session_state.cmd_cat = None
+                st.rerun()
+
+            st.markdown(
+                f'<div style="font-size:.78rem;color:#8A9AB5;margin:.4rem 0 .7rem">'
+                f'📂 {cat_sel_cmd}</div>', unsafe_allow_html=True)
+            st.markdown('<span class="section-label">Choisissez un article</span>',
+                        unsafe_allow_html=True)
+
+            # Articles de cette catégorie qui ont des commandes
+            arts_cmd = []
+            seen_cmd = set()
+            for o in orders:
+                mk_o = model_key(o["Modèle"])
+                if mk_o in seen_cmd:
+                    continue
+                e_o   = mk_idx_cmd.get(mk_o, {})
+                cat_o = e_o.get("categorie","") or "Non classé"
+                if cat_o != cat_sel_cmd:
+                    continue
+                seen_cmd.add(mk_o)
+                arts_cmd.append((mk_o, o["Modèle"]))
+
+            clicked_cmd_art = None
+            NB_ART_COLS = 3
+            for ri in range(0, len(arts_cmd), NB_ART_COLS):
+                a0, a1, a2 = st.columns(3)
+                for ci_art, ac in enumerate([a0, a1, a2]):
+                    if ri + ci_art >= len(arts_cmd):
+                        break
+                    mk_a, name_a = arts_cmd[ri + ci_art]
+                    entry_a = mk_idx_cmd.get(mk_a, {})
+                    sd_a    = stock_data.get(mk_a, {})
+                    seuil_a = sd_a.get("seuil_min", 0)
+                    stk_a   = sd_a.get("stock", {})
+                    total_a = sum(v for cd in stk_a.values() for v in cd.values())
+                    cmd_a   = sum(
+                        max(0, seuil_a - stk_a.get(c,{}).get(s,0))
+                        for c in sd_a.get("colors",[])
+                        for s in sd_a.get("sizes",[]))
+                    b64_a   = entry_a.get("b64_thumb") or sd_a.get("b64_thumb")
+
+                    if b64_a:
+                        img_a = (f'<img src="data:image/png;base64,{b64_a}" '
+                                 f'style="width:100%;height:120px;object-fit:cover;'
+                                 f'display:block">')
+                    else:
+                        img_a = (f'<div style="width:100%;height:120px;'
+                                 f'background:linear-gradient(135deg,#EEF1F7,#E0E5EF);'
+                                 f'display:flex;align-items:center;justify-content:center;'
+                                 f'font-size:3rem">👕</div>')
+
+                    badge_col_a = "#DC2626" if total_a == 0 else "#D97706"
+                    badge_txt_a = "Rupture" if total_a == 0 else "Stock faible"
+
+                    with ac:
+                        st.markdown(
+                            f'<div style="background:#FFFFFF;border:2px solid #E0E5EF;'
+                            f'border-radius:14px;overflow:hidden;margin-bottom:.5rem;'
+                            f'box-shadow:0 2px 8px rgba(27,43,75,.06)">'
+                            f'<div style="position:relative">{img_a}'
+                            f'<span style="position:absolute;top:7px;right:7px;'
+                            f'background:{badge_col_a};color:#FFF;font-size:.55rem;'
+                            f'font-weight:700;padding:2px 7px;border-radius:20px;'
+                            f'text-transform:uppercase">{badge_txt_a}</span></div>'
+                            f'<div style="padding:.6rem .75rem">'
+                            f'<div style="font-weight:800;color:#1B2B4B;font-size:.86rem;'
+                            f'white-space:nowrap;overflow:hidden;text-overflow:ellipsis">'
+                            f'{name_a}</div>'
+                            f'<div style="font-size:.68rem;color:#8A9AB5;margin:.2rem 0">'
+                            f'{total_a} pcs en stock</div>'
+                            f'<div style="font-size:.72rem;color:#DC2626;font-weight:700">'
+                            f'+{cmd_a} pcs à commander</div>'
+                            f'</div></div>', unsafe_allow_html=True)
+                        if st.button("📊 Voir la situation", key=f"cmd_art_{mk_a}",
+                                     use_container_width=True):
+                            clicked_cmd_art = mk_a
+
+            if clicked_cmd_art:
+                st.session_state.cmd_art = clicked_cmd_art
+                st.rerun()
+
+        # ════════════════════════════════════════════════════════
+        # ÉTAPE C — Situation complète de l'article
+        # ════════════════════════════════════════════════════════
+        else:
+            mk_det  = st.session_state.cmd_art
+            sd_det  = stock_data.get(mk_det, {})
+            entry_det = mk_idx_cmd.get(mk_det, {})
+            colors_det = sd_det.get("colors", [])
+            sizes_det  = sd_det.get("sizes",  [])
+            stk_det    = sd_det.get("stock",  {})
+            seuil_det  = sd_det.get("seuil_min", 0)
+            name_det   = sd_det.get("model_name", mk_det)
+
+            # Boutons navigation
+            nav1, nav2 = st.columns([1, 1])
+            with nav1:
+                if st.button("← Retour articles", key="cmd_back_art"):
+                    st.session_state.cmd_art = None
+                    st.rerun()
+            with nav2:
+                if st.button("⌂ Retour catégories", key="cmd_back_cat2"):
+                    st.session_state.cmd_cat = None
+                    st.session_state.cmd_art = None
+                    st.rerun()
+
+            # Carte article
+            b64_det2 = entry_det.get("b64_thumb") or sd_det.get("b64_thumb")
+            if b64_det2:
+                ph_det = (f'<img src="data:image/png;base64,{b64_det2}" '
+                          f'style="width:72px;height:88px;object-fit:cover;'
+                          f'border-radius:8px;border:2px solid #E0E5EF;flex-shrink:0">')
             else:
-                arr_m=st.selectbox("Modèle reçu",options=list(stock_data.keys()),format_func=lambda k:stock_data[k].get("model_name",k),key="arr_sel")
-                if arr_m:
-                    md=stock_data[arr_m]; ac=md.get("colors",[]); az=md.get("sizes",[])
-                    df_a=pd.DataFrame([{"Couleur":c,**{s:0 for s in az}} for c in ac])
-                    ea=st.data_editor(df_a,use_container_width=True,hide_index=True,
-                        column_config={"Couleur":st.column_config.TextColumn("Couleur",disabled=True,width="medium"),
-                                       **{s:st.column_config.NumberColumn(s,min_value=0,max_value=9999,step=1,width="small") for s in az}},key=f"ae_{arr_m}")
-                    fournisseur_arr = st.text_input("Fournisseur (optionnel)",
-                        placeholder="Ex: Fournisseur Paris, Ali Express…", key="fourn_arr")
-                    if st.button("✅ Valider l'arrivage",key="val_arr"):
-                        total=0; cs=stock_data[arr_m].get("stock",{}); detail={}
-                        for _,row in ea.iterrows():
-                            col=row["Couleur"]; cs.setdefault(col,{}); detail[col]={}
-                            for sz in az:
-                                q=int(row[sz]); cs[col][sz]=cs[col].get(sz,0)+q
-                                if q>0: detail[col][sz]=q; total+=q
-                        stock_data[arr_m]["stock"]=cs
-                        stock_data[arr_m]["last_update"]=datetime.now().strftime("%d/%m/%Y %H:%M")
-                        save_stock(stock_data)
-                        save_arrivage({"date":datetime.now().strftime("%d/%m/%Y %H:%M"),
-                                       "model_key":arr_m,
-                                       "model_name":md.get("model_name",arr_m),
-                                       "fournisseur":fournisseur_arr or "—",
-                                       "total":total, "detail":detail})
-                        st.success(f"✓ {total} pièces ajoutées"); st.rerun()
+                ph_det = (f'<div style="width:72px;height:88px;background:#EEF1F7;'
+                          f'border-radius:8px;border:2px solid #E0E5EF;display:flex;'
+                          f'align-items:center;justify-content:center;'
+                          f'font-size:2rem;flex-shrink:0">👕</div>')
+
+            total_det = sum(v for cd in stk_det.values() for v in cd.values())
+            cmd_det   = sum(max(0, seuil_det - stk_det.get(c,{}).get(s,0))
+                            for c in colors_det for s in sizes_det)
+            cat_det   = entry_det.get("categorie","") or "Non classé"
+
+            color_dots = "".join(
+                f'<span style="width:13px;height:13px;border-radius:50%;'
+                f'background:{HEX_MAP.get(c,"#888")};border:2px solid #FFF;'
+                f'box-shadow:0 1px 3px rgba(0,0,0,.2);display:inline-block;'
+                f'margin-right:3px"></span>'
+                for c in colors_det)
+
+            st.markdown(
+                f'<div style="display:flex;gap:.9rem;align-items:center;'
+                f'background:#FFFFFF;border:2px solid #E0E5EF;border-radius:14px;'
+                f'padding:.8rem 1rem;margin-bottom:1rem;'
+                f'box-shadow:0 3px 12px rgba(27,43,75,.07)">'
+                f'{ph_det}'
+                f'<div style="flex:1;min-width:0">'
+                f'<div style="font-size:.6rem;color:var(--gold);font-weight:700;'
+                f'text-transform:uppercase;letter-spacing:.1em">📂 {cat_det}</div>'
+                f'<div style="font-size:1.1rem;font-weight:800;color:#1B2B4B;'
+                f'margin:.15rem 0">{name_det}</div>'
+                f'<div style="margin-bottom:.3rem">{color_dots}</div>'
+                f'<div style="font-size:.7rem;color:#8A9AB5">'
+                f'{total_det} pcs en stock · Seuil : {seuil_det}</div>'
+                f'</div>'
+                f'<div style="text-align:center;flex-shrink:0">'
+                f'<div style="font-size:1.4rem;font-weight:900;color:#DC2626">+{cmd_det}</div>'
+                f'<div style="font-size:.6rem;color:#8A9AB5;text-transform:uppercase;'
+                f'letter-spacing:.08em">à commander</div>'
+                f'</div></div>', unsafe_allow_html=True)
+
+            # Légende
+            st.markdown(
+                '<div style="display:flex;gap:1rem;font-size:.62rem;color:#8A9AB5;'
+                'margin-bottom:.5rem;flex-wrap:wrap">'
+                '<span style="display:flex;align-items:center;gap:4px">'
+                '<span style="width:12px;height:12px;border-radius:2px;'
+                'background:#F0FFF4;border:1px solid #059669"></span>OK</span>'
+                '<span style="display:flex;align-items:center;gap:4px">'
+                '<span style="width:12px;height:12px;border-radius:2px;'
+                'background:#FFF8E1;border:1px solid #D97706"></span>Faible</span>'
+                '<span style="display:flex;align-items:center;gap:4px">'
+                '<span style="width:12px;height:12px;border-radius:2px;'
+                'background:#FFE4E4;border:1px solid #DC2626"></span>Rupture</span>'
+                '<span style="margin-left:auto;font-style:italic">'
+                'Stock · <span style="color:#DC2626;font-weight:700">+N</span> = à commander'
+                '</span></div>', unsafe_allow_html=True)
+
+            # Grille tailles × couleurs
+            th_det = "".join(
+                f'<th style="padding:8px 6px;text-align:center;font-size:.66rem;'
+                f'color:#8A9AB5;text-transform:uppercase;letter-spacing:.08em;'
+                f'border-bottom:2px solid #EEF1F7;border-right:1px solid #EEF1F7;'
+                f'min-width:48px">{s}</th>'
+                for s in sizes_det)
+
+            rows_det = ""
+            for ci_d, c_d in enumerate(colors_det):
+                hx_d   = HEX_MAP.get(c_d, "#888")
+                row_bg = "#FFFFFF" if ci_d % 2 == 0 else "#F8F9FC"
+                cells_d = ""
+                for s_d in sizes_det:
+                    q_d = stk_det.get(c_d, {}).get(s_d, 0)
+                    m_d = max(0, seuil_det - q_d)
+                    if q_d == 0:
+                        cbg = "#FFE4E4"; cq = "#DC2626"
+                        plus = (f'<div style="font-size:.62rem;color:#DC2626;'
+                                f'font-weight:800;line-height:1.1">+{m_d}</div>'
+                                if m_d > 0 else "")
+                    elif m_d > 0:
+                        cbg = "#FFF8E1"; cq = "#D97706"
+                        plus = (f'<div style="font-size:.62rem;color:#D97706;'
+                                f'font-weight:800;line-height:1.1">+{m_d}</div>')
+                    else:
+                        cbg = "#F0FFF4"; cq = "#059669"; plus = ""
+                    cells_d += (
+                        f'<td style="padding:7px 4px;text-align:center;'
+                        f'background:{cbg};border-bottom:1px solid #EEF1F7;'
+                        f'border-right:1px solid #EEF1F7">'
+                        f'<div style="font-size:.88rem;font-weight:800;'
+                        f'color:{cq};line-height:1.2">{q_d}</div>'
+                        f'{plus}</td>')
+                rows_det += (
+                    f'<tr>'
+                    f'<td style="padding:7px 10px;border-bottom:1px solid #EEF1F7;'
+                    f'border-right:2px solid #EEF1F7;background:{row_bg};white-space:nowrap">'
+                    f'<span style="display:inline-flex;align-items:center;gap:7px">'
+                    f'<span style="width:13px;height:13px;border-radius:50%;'
+                    f'background:{hx_d};flex-shrink:0;'
+                    f'border:1.5px solid rgba(0,0,0,.12)"></span>'
+                    f'<span style="font-size:.8rem;font-weight:600;color:#1B2B4B">'
+                    f'{c_d}</span></span></td>'
+                    f'{cells_d}</tr>')
+
+            st.markdown(
+                f'<div style="background:#FFFFFF;border:2px solid #E0E5EF;'
+                f'border-radius:14px;overflow:hidden;'
+                f'box-shadow:0 3px 12px rgba(27,43,75,.07)">'
+                f'<div style="overflow-x:auto">'
+                f'<table style="width:100%;border-collapse:collapse">'
+                f'<thead><tr style="background:#F4F6FA">'
+                f'<th style="padding:8px 10px;text-align:left;font-size:.62rem;'
+                f'color:#8A9AB5;text-transform:uppercase;letter-spacing:.1em;'
+                f'border-bottom:2px solid #EEF1F7;border-right:2px solid #EEF1F7">'
+                f'Couleur</th>{th_det}</tr></thead>'
+                f'<tbody>{rows_det}</tbody>'
+                f'</table></div></div>',
+                unsafe_allow_html=True)
+
+        # ── Exports globaux ──────────────────────────────────────────
+        if orders:
+            st.markdown("<div style='margin-top:.8rem'></div>",
+                        unsafe_allow_html=True)
+            df_o = pd.DataFrame(orders)
+            e1, e2, e3 = st.columns(3)
+            with e1:
+                st.download_button(
+                    "📥 Excel",
+                    build_order_excel(orders),
+                    f"commande_{datetime.now().strftime('%Y%m%d')}.xlsx",
+                    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                    use_container_width=True)
+            with e2:
+                st.download_button(
+                    "📄 CSV",
+                    df_o.to_csv(index=False).encode("utf-8-sig"),
+                    f"commande_{datetime.now().strftime('%Y%m%d')}.csv",
+                    "text/csv",
+                    use_container_width=True)
+            with e3:
+                lines = [f"🛒 *COMMANDE — {datetime.now().strftime('%d/%m/%Y')}*\n"]
+                cm = ""
+                for o in orders:
+                    if o["Modèle"] != cm:
+                        cm = o["Modèle"]
+                        lines.append(f"\n*{cm}*")
+                    lines.append(
+                        f"  {'🔴' if o['En stock']==0 else '🟡'} "
+                        f"{o['Couleur']}/{o['Taille']} → *{o['À commander']}* pcs")
+                lines.append(f"\n_Total: {all_orders_tp} pièces_")
+                wa_button("https://wa.me/?text=" + urllib.parse.quote("\n".join(lines)))
+
+        st.markdown("<hr>",unsafe_allow_html=True)
+        st.markdown("### 📬 Arrivage")
+        st.caption("Quantités reçues → ajoutées au stock automatiquement.")
+        if not stock_data:
+            st.warning("Aucun stock configuré.")
+        else:
+            arr_m=st.selectbox("Modèle reçu",options=list(stock_data.keys()),format_func=lambda k:stock_data[k].get("model_name",k),key="arr_sel")
+            if arr_m:
+                md=stock_data[arr_m]; ac=md.get("colors",[]); az=md.get("sizes",[])
+                df_a=pd.DataFrame([{"Couleur":c,**{s:0 for s in az}} for c in ac])
+                ea=st.data_editor(df_a,use_container_width=True,hide_index=True,
+                    column_config={"Couleur":st.column_config.TextColumn("Couleur",disabled=True,width="medium"),
+                                   **{s:st.column_config.NumberColumn(s,min_value=0,max_value=9999,step=1,width="small") for s in az}},key=f"ae_{arr_m}")
+                fournisseur_arr = st.text_input("Fournisseur (optionnel)",
+                    placeholder="Ex: Fournisseur Paris, Ali Express…", key="fourn_arr")
+                if st.button("✅ Valider l'arrivage",key="val_arr"):
+                    total=0; cs=stock_data[arr_m].get("stock",{}); detail={}
+                    for _,row in ea.iterrows():
+                        col=row["Couleur"]; cs.setdefault(col,{}); detail[col]={}
+                        for sz in az:
+                            q=int(row[sz]); cs[col][sz]=cs[col].get(sz,0)+q
+                            if q>0: detail[col][sz]=q; total+=q
+                    stock_data[arr_m]["stock"]=cs
+                    stock_data[arr_m]["last_update"]=datetime.now().strftime("%d/%m/%Y %H:%M")
+                    save_stock(stock_data)
+                    save_arrivage({"date":datetime.now().strftime("%d/%m/%Y %H:%M"),
+                                   "model_key":arr_m,
+                                   "model_name":md.get("model_name",arr_m),
+                                   "fournisseur":fournisseur_arr or "—",
+                                   "total":total, "detail":detail})
+                    st.success(f"✓ {total} pièces ajoutées"); st.rerun()
 
         # ── Historique des arrivages ──────────────────────────────────────
         st.markdown("<hr>",unsafe_allow_html=True)
         st.markdown("### 📦 Historique des arrivages")
         arr_hist = load_arrivages()
         if not arr_hist:
-            st.info("Aucun arrivage enregistré.")
+        st.info("Aucun arrivage enregistré.")
         else:
-            st.markdown(f"**{len(arr_hist)}** arrivage(s) enregistré(s)")
-            # Filtre modèle
-            arr_models = ["Tous"] + list(dict.fromkeys(a["model_name"] for a in arr_hist))
-            arr_fil = st.selectbox("Filtrer par modèle",arr_models,key="arr_hist_fil")
-            arr_show = arr_hist if arr_fil=="Tous" else [a for a in arr_hist if a["model_name"]==arr_fil]
-            for a in arr_show:
-                detail_html=""
-                for col,sizes in a.get("detail",{}).items():
-                    hx=HEX_MAP.get(col,"#888")
-                    sizes_str=" · ".join(f"{sz}×{q}" for sz,q in sizes.items())
-                    detail_html+=f'<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 6px 2px 0"><span style="width:10px;height:10px;border-radius:50%;background:{hx};border:1px solid #ccc;display:inline-block"></span>{col}: {sizes_str}</span>'
-                st.markdown(f"""
-                <div class="history-card" style="border-left:3px solid #1565C0">
-                    <div style="display:flex;justify-content:space-between">
-                        <div class="history-date">📅 {a.get("date","")}</div>
-                        <div style="font-size:.72rem;color:#FFF;background:#1565C0;padding:2px 10px">{a.get("total",0)} pièces</div>
-                    </div>
-                    <div class="history-title">{a.get("model_name","")}</div>
-                    <div style="font-size:.75rem;color:#666;margin:3px 0">🏭 {a.get("fournisseur","—")}</div>
-                    <div style="margin-top:6px;font-size:.75rem">{detail_html}</div>
-                </div>""", unsafe_allow_html=True)
-            # Export
-            df_arr_h = pd.DataFrame([{"Date":a["date"],"Modèle":a["model_name"],
-                "Fournisseur":a.get("fournisseur","—"),"Total pièces":a.get("total",0)} for a in arr_show])
-            st.download_button("📥 Exporter arrivages (Excel)",
-                _df_to_excel(df_arr_h,"Arrivages"),
-                f"arrivages_{datetime.now().strftime('%Y%m%d')}.xlsx",
-                "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+        st.markdown(f"**{len(arr_hist)}** arrivage(s) enregistré(s)")
+        # Filtre modèle
+        arr_models = ["Tous"] + list(dict.fromkeys(a["model_name"] for a in arr_hist))
+        arr_fil = st.selectbox("Filtrer par modèle",arr_models,key="arr_hist_fil")
+        arr_show = arr_hist if arr_fil=="Tous" else [a for a in arr_hist if a["model_name"]==arr_fil]
+        for a in arr_show:
+            detail_html=""
+            for col,sizes in a.get("detail",{}).items():
+                hx=HEX_MAP.get(col,"#888")
+                sizes_str=" · ".join(f"{sz}×{q}" for sz,q in sizes.items())
+                detail_html+=f'<span style="display:inline-flex;align-items:center;gap:4px;margin:2px 6px 2px 0"><span style="width:10px;height:10px;border-radius:50%;background:{hx};border:1px solid #ccc;display:inline-block"></span>{col}: {sizes_str}</span>'
+            st.markdown(f"""
+            <div class="history-card" style="border-left:3px solid #1565C0">
+                <div style="display:flex;justify-content:space-between">
+                    <div class="history-date">📅 {a.get("date","")}</div>
+                    <div style="font-size:.72rem;color:#FFF;background:#1565C0;padding:2px 10px">{a.get("total",0)} pièces</div>
+                </div>
+                <div class="history-title">{a.get("model_name","")}</div>
+                <div style="font-size:.75rem;color:#666;margin:3px 0">🏭 {a.get("fournisseur","—")}</div>
+                <div style="margin-top:6px;font-size:.75rem">{detail_html}</div>
+            </div>""", unsafe_allow_html=True)
+        # Export
+        df_arr_h = pd.DataFrame([{"Date":a["date"],"Modèle":a["model_name"],
+            "Fournisseur":a.get("fournisseur","—"),"Total pièces":a.get("total",0)} for a in arr_show])
+        st.download_button("📥 Exporter arrivages (Excel)",
+            _df_to_excel(df_arr_h,"Arrivages"),
+            f"arrivages_{datetime.now().strftime('%Y%m%d')}.xlsx",
+            "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # ══════════════════════════════════════════════════════════════════════════════
