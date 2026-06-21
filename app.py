@@ -589,13 +589,19 @@ def _gs_spreadsheet():
     except Exception:
         return None
 
+# Feuilles stockées en multi-lignes (1 ligne par entrée) pour dépasser la limite 50K/cellule
+_GS_MULTIROW_LISTS = {
+    "ventes", "inventaire_historique", "arrivages",
+    "alimentation_historique", "alimentation_pending", "ventes_offline",
+}
+
 def _gs_load(sheet_name, default):
     ss = _gs_spreadsheet()
     if ss is None:
         return None
     try:
         ws = ss.worksheet(sheet_name)
-        # Le stock utilise 1 ligne par modèle (col A = clé, col B = JSON)
+        # Stock : col A = clé modèle, col B = JSON
         if sheet_name == "stock":
             rows = ws.get_all_values()
             if not rows:
@@ -608,7 +614,20 @@ def _gs_load(sheet_name, default):
                     except Exception:
                         pass
             return result if result else default
-        # Les autres feuilles utilisent A1 = JSON complet
+        # Listes volumineuses : 1 ligne par entrée (col A = JSON de l'entrée)
+        if sheet_name in _GS_MULTIROW_LISTS:
+            rows = ws.get_all_values()
+            if not rows:
+                return default
+            result = []
+            for r in rows:
+                if r and r[0]:
+                    try:
+                        result.append(json.loads(r[0]))
+                    except Exception:
+                        pass
+            return result if result else default
+        # Petits fichiers (profils, categories) : JSON complet en A1
         val = ws.acell("A1").value
         return json.loads(val) if val else default
     except Exception:
@@ -622,8 +641,8 @@ def _gs_save(sheet_name, data):
         try:
             ws = ss.worksheet(sheet_name)
         except Exception:
-            ws = ss.add_worksheet(title=sheet_name, rows=2000, cols=2)
-        # Le stock : 1 ligne par modèle (pas de limite de taille)
+            ws = ss.add_worksheet(title=sheet_name, rows=5000, cols=2)
+        # Stock : 1 ligne par modèle
         if sheet_name == "stock" and isinstance(data, dict):
             rows = []
             for mk, v in data.items():
@@ -634,16 +653,23 @@ def _gs_save(sheet_name, data):
             if rows:
                 ws.update("A1", rows)
             return
-        # Autres feuilles : JSON complet en A1 (sans b64_thumb)
-        if sheet_name == "inventaire_historique":
-            if isinstance(data, list):
-                data_gs = [{kk: vv for kk, vv in item.items() if kk != "b64_thumb"}
-                           if isinstance(item, dict) else item for item in data]
+        # Listes volumineuses : 1 ligne par entrée
+        if sheet_name in _GS_MULTIROW_LISTS and isinstance(data, list):
+            if sheet_name == "inventaire_historique":
+                data_clean = [
+                    {kk: vv for kk, vv in item.items() if kk != "b64_thumb"}
+                    if isinstance(item, dict) else item
+                    for item in data
+                ]
             else:
-                data_gs = data
-        else:
-            data_gs = data
-        ws.update("A1", [[json.dumps(data_gs, ensure_ascii=False)]])
+                data_clean = data
+            rows = [[json.dumps(entry, ensure_ascii=False)] for entry in data_clean]
+            ws.clear()
+            if rows:
+                ws.update("A1", rows)
+            return
+        # Petits fichiers : JSON en A1
+        ws.update("A1", [[json.dumps(data, ensure_ascii=False)]])
     except Exception:
         pass
 
