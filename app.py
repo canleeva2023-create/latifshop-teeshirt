@@ -568,7 +568,7 @@ _GS_SCOPES = [
     "https://www.googleapis.com/auth/drive",
 ]
 
-@st.cache_resource(show_spinner=False)
+@st.cache_resource(show_spinner=False, ttl=3600)
 def _gs_client():
     if not _GSPREAD_AVAILABLE:
         return None
@@ -623,7 +623,11 @@ def _gs_load(sheet_name, default):
             for r in rows:
                 if r and r[0]:
                     try:
-                        result.append(json.loads(r[0]))
+                        parsed = json.loads(r[0])
+                        if isinstance(parsed, list):
+                            # Ancien format : liste complète en A1 → migrer
+                            return parsed if parsed else default
+                        result.append(parsed)
                     except Exception:
                         pass
             return result if result else default
@@ -1409,7 +1413,7 @@ if st.session_state.user_role == "livreur":
                     if ci2 >= len(row): break
                     mk_a, entry_a = row[ci2]
                     b64_a = entry_a.get("b64_thumb") or stock_ali.get(mk_a,{}).get("b64_thumb","")
-                    photo_h = (f'<img src="data:image/png;base64,{b64_a}" style="width:100%;height:100px;object-fit:cover;border-radius:8px;margin-bottom:.4rem">'
+                    photo_h = (f'<img src="data:image/jpeg;base64,{b64_a}" style="width:100%;height:100px;object-fit:cover;border-radius:8px;margin-bottom:.4rem">'
                                if b64_a else '<div style="height:100px;background:#EEF1F7;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:2rem;margin-bottom:.4rem">👕</div>')
                     with col_ref:
                         st.markdown(
@@ -1440,7 +1444,7 @@ if st.session_state.user_role == "livreur":
         ah1, ah2 = st.columns([1, 3])
         with ah1:
             if b64_ali:
-                st.markdown(f'<img src="data:image/png;base64,{b64_ali}" style="width:100%;border-radius:12px">', unsafe_allow_html=True)
+                st.markdown(f'<img src="data:image/jpeg;base64,{b64_ali}" style="width:100%;border-radius:12px">', unsafe_allow_html=True)
             else:
                 st.markdown('<div style="font-size:4rem;text-align:center">👕</div>', unsafe_allow_html=True)
         with ah2:
@@ -1551,11 +1555,7 @@ if tab_dashboard:
         week_start  = (datetime.now() - timedelta(days=datetime.now().weekday())).strftime("%d/%m/%Y")
 
         ventes_today = [v for v in ventes_all if v.get("date","").startswith(today_str)]
-        ventes_week  = [v for v in ventes_all
-                        if v.get("date","") >= week_start.replace("/","") or
-                        v.get("date","")[:10].replace("/","") >= week_start.replace("/","")]
 
-        # Recalcul correct semaine
         def in_this_week(date_str):
             try:
                 d = datetime.strptime(date_str[:10], "%d/%m/%Y")
@@ -1614,7 +1614,7 @@ if tab_dashboard:
                     nom_t = key_to_name.get(mk_t, mk_t)
                     b64_t = stock_dash.get(mk_t,{}).get("b64_thumb","")
                     photo_t = (
-                        f'<img src="data:image/png;base64,{b64_t}" style="width:100%;height:160px;object-fit:cover;border-radius:12px;margin-bottom:.7rem">'
+                        f'<img src="data:image/jpeg;base64,{b64_t}" style="width:100%;height:160px;object-fit:cover;border-radius:12px;margin-bottom:.7rem">'
                         if b64_t else
                         f'<div style="height:160px;background:#EEF1F7;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:3.5rem;margin-bottom:.7rem">👕</div>'
                     )
@@ -2360,7 +2360,7 @@ if tab_stock:
 
                             b64_a = entry_a.get("b64_thumb") or sd_a.get("b64_thumb")
                             if b64_a:
-                                img_a = (f'<img src="data:image/png;base64,{b64_a}" '
+                                img_a = (f'<img src="data:image/jpeg;base64,{b64_a}" '
                                          f'style="width:100%;height:130px;'
                                          f'object-fit:cover;display:block">')
                             else:
@@ -2460,7 +2460,7 @@ if tab_stock:
                 if b64_det:
                     ph_html = (f'<div style="width:150px;min-height:150px;flex-shrink:0;'
                                f'overflow:hidden;position:relative">'
-                               f'<img src="data:image/png;base64,{b64_det}" '
+                               f'<img src="data:image/jpeg;base64,{b64_det}" '
                                f'style="width:150px;min-height:150px;object-fit:cover;'
                                f'display:block"></div>')
                 else:
@@ -2719,6 +2719,7 @@ if tab_stock:
 if tab_commandes:
     with tab_commandes:
         history_s=load_history(); stock_data=load_stock()
+        cats_s = load_categories()
         st.markdown("### 🛒 Liste de commandes")
 
         # ── Session state navigation commandes ──────────────────────
@@ -2856,7 +2857,7 @@ if tab_commandes:
                     b64_a   = entry_a.get("b64_thumb") or sd_a.get("b64_thumb")
 
                     if b64_a:
-                        img_a = (f'<img src="data:image/png;base64,{b64_a}" '
+                        img_a = (f'<img src="data:image/jpeg;base64,{b64_a}" '
                                  f'style="width:100%;height:120px;object-fit:cover;'
                                  f'display:block">')
                     else:
@@ -2923,7 +2924,7 @@ if tab_commandes:
             # Carte article
             b64_det2 = entry_det.get("b64_thumb") or sd_det.get("b64_thumb")
             if b64_det2:
-                ph_det = (f'<img src="data:image/png;base64,{b64_det2}" '
+                ph_det = (f'<img src="data:image/jpeg;base64,{b64_det2}" '
                           f'style="width:72px;height:88px;object-fit:cover;'
                           f'border-radius:8px;border:2px solid #E0E5EF;flex-shrink:0">')
             else:
@@ -3159,8 +3160,10 @@ def check_online() -> bool:
     """Vérifie la connexion internet (ping Google)."""
     import socket
     try:
-        socket.setdefaulttimeout(2)
-        socket.socket(socket.AF_INET, socket.SOCK_STREAM).connect(("8.8.8.8", 53))
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        s.settimeout(2)
+        s.connect(("8.8.8.8", 53))
+        s.close()
         return True
     except Exception:
         return False
@@ -3177,6 +3180,7 @@ def sync_offline_queue():
 
 with tab_ventes:
     stock_data_v  = load_stock()
+    _all_ventes   = load_ventes()   # chargé une seule fois pour tout l'onglet
     vendeur_actuel = st.session_state.user_name
 
     # ════════════════════════════════════════════════════════════════════════
@@ -3184,7 +3188,7 @@ with tab_ventes:
     # ════════════════════════════════════════════════════════════════════════
     if is_admin:
         import calendar as _cal
-        ventes_cal = load_ventes()
+        ventes_cal = _all_ventes
         now_cal    = datetime.now()
 
         if st.session_state.v_admin_month is None:
@@ -3453,7 +3457,7 @@ with tab_ventes:
 
             # Tri par popularité
             ventes_count_v = {}
-            for vv in load_ventes():
+            for vv in _all_ventes:
                 ventes_count_v[vv.get("model_key","")] = ventes_count_v.get(vv.get("model_key",""), 0) + vv.get("quantite",1)
             arts_cat.sort(key=lambda x: ventes_count_v.get(x[0], 0), reverse=True)
 
@@ -3798,7 +3802,7 @@ with tab_ventes:
     # ══════════════════════════════════════════════════════════════════════════
     if st.session_state.get("v_step", 0) == 0 or is_admin:
         st.markdown("<hr>", unsafe_allow_html=True)
-        ventes_rank = load_ventes()
+        ventes_rank = _all_ventes
         st.markdown("### 🏆 Classement des articles les plus vendus")
 
         # Filtre période
@@ -3904,7 +3908,7 @@ with tab_ventes:
         st.markdown("<hr>",unsafe_allow_html=True)
         st.markdown("### 📋 Rapport journalier")
         today_str = datetime.now().strftime("%d/%m/%Y")
-        ventes_jour = [v for v in load_ventes() if v.get("date","").startswith(today_str)]
+        ventes_jour = [v for v in _all_ventes if v.get("date","").startswith(today_str)]
         pcs_jour = sum(v.get("quantite",1) for v in ventes_jour)
 
         rj1,rj2,rj3 = st.columns(3)
@@ -3969,7 +3973,7 @@ with tab_ventes:
 
     st.markdown("<hr>",unsafe_allow_html=True)
     st.markdown("### 📅 Historique des ventes")
-    ventes_all=load_ventes()
+    ventes_all=_all_ventes
     if not ventes_all:
         st.info("Aucune vente enregistrée.")
     else:
@@ -4080,7 +4084,7 @@ if tab_ali_admin:
                             mk_req = req.get("model_key","")
                             b64_req = stock_ap.get(mk_req,{}).get("b64_thumb","")
                             if b64_req:
-                                st.markdown(f'<img src="data:image/png;base64,{b64_req}" style="width:100%;border-radius:10px">', unsafe_allow_html=True)
+                                st.markdown(f'<img src="data:image/jpeg;base64,{b64_req}" style="width:100%;border-radius:10px">', unsafe_allow_html=True)
 
                         # Modifier les quantités avant approbation
                         if st.session_state.ali_edit_idx == pi:
@@ -4157,10 +4161,12 @@ if tab_ali_admin:
                     st.session_state.ali_admin_date = None
                     st.rerun()
             with an2:
+                _mois_fr_ali = ["","Janvier","Février","Mars","Avril","Mai","Juin",
+                                "Juillet","Août","Septembre","Octobre","Novembre","Décembre"]
                 st.markdown(
                     f'<div style="text-align:center;font-family:Space Grotesk,sans-serif;'
                     f'font-size:1.2rem;font-weight:700;color:#1B2B4B;padding:.5rem">'
-                    f'{_cal2.month_name[mo_a].capitalize()} {yr_a}</div>',
+                    f'{_mois_fr_ali[mo_a]} {yr_a}</div>',
                     unsafe_allow_html=True)
             with an3:
                 if st.button("Mois suivant ▶", key="ali_cal_next", use_container_width=True):
